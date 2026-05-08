@@ -16,22 +16,68 @@ Everything ships with three guarantees:
 
 ## Catalog
 
+The catalog ships with **26 connectors** out of the box.
+
+### Identity
+
 | Connector | Category | Auth | Notes |
 |---|---|---|---|
 | [Microsoft Entra ID](/docs/connectors/azure-entra) | Identity | Azure AD app (client credentials) | Directory audits + risky sign-ins via Microsoft Graph |
-| [Azure Activity Logs](/docs/connectors/azure-activity) | Cloud (control plane) | Azure AD app + subscription | Subscription-scope ARM activity, IAM grants, policy changes |
+| Okta | Identity | API token | System log |
+| Duo Security | Identity / MFA | Integration key + secret | Authentication logs and policy events |
+| 1Password | IAM / Secrets | Service account token | Vault access events and shared-item changes |
+
+### EDR / XDR
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
+| CrowdStrike Falcon | EDR | OAuth2 client credentials | Detections |
+| SentinelOne | EDR / XDR | API token | Threats with severity mapped from `confidenceLevel` |
 | [Microsoft Defender (XDR)](/docs/connectors/azure-defender) | EDR / XDR | Azure AD app | Cross-product alerts via Microsoft Graph Security |
+| Palo Alto Cortex XDR | EDR / XDR | API key + ID | Incidents and alerts |
+
+### SIEM
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
+| Splunk | SIEM | HEC token / API | Saved-search results |
+| Microsoft Sentinel | SIEM | Azure AD app | Incidents |
+| Elastic | SIEM | API key | Detection alerts |
+
+### Cloud (control plane / posture)
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
+| AWS Security Hub | Cloud (posture) | AWS keys / role | Findings |
+| [Azure Activity Logs](/docs/connectors/azure-activity) | Cloud (control plane) | Azure AD app + subscription | Subscription-scope ARM activity, IAM grants, policy changes |
 | [GCP Cloud Audit Logs](/docs/connectors/gcp-cloud-audit) | Cloud (control plane) | Service account JSON | Admin Activity + Data Access + System Event |
 | [GCP Security Command Center](/docs/connectors/gcp-scc) | Cloud (posture) | Service account JSON | Org-scope active findings |
+| Wiz | CSPM | OAuth2 client credentials | Cloud security findings via GraphQL |
+
+### SaaS
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
 | [Microsoft 365 Audit](/docs/connectors/m365-audit) | SaaS | Azure AD app (shares Entra creds) | Unified audit log: AAD, Exchange, SharePoint, Teams |
 | [Google Workspace](/docs/connectors/google-workspace) | SaaS / Identity | Service account + DWD | Admin SDK Reports: login, admin, drive, token, mobile |
 | [Cloudflare](/docs/connectors/cloudflare) | SaaS | API token | Account audit logs (operator activity, not edge traffic) |
+| Proofpoint | Email Security | Service principal | Threat events and click telemetry |
+| ServiceNow | ITSM | OAuth2 / basic auth | Security incident table updates |
+| Jira | Ticketing | API token | Security ticket and project events |
+
+### VCS / AppSec
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
 | [GitHub](/docs/connectors/github) | VCS | PAT or App installation token | Org audit log + Code Scanning alerts |
-| Okta | Identity | API token | System log (already shipped) |
-| AWS Security Hub | Cloud (posture) | AWS keys / role | Findings (already shipped) |
-| CrowdStrike Falcon | EDR | OAuth2 client credentials | Detections (already shipped) |
-| Splunk | SIEM | HEC token / API | Saved-search results (already shipped) |
-| Microsoft Sentinel | SIEM | Azure AD app | Incidents (already shipped) |
+| Snyk | SCA / AppSec | API token | Dependency, container, and IaC issues |
+
+### Network
+
+| Connector | Category | Auth | Notes |
+|---|---|---|---|
+| Tailscale | Network | API key | ACL audit + device changes |
+| Zscaler | Network / Cloud Proxy | API key | ZIA and ZPA security events |
 
 ## Adding a connector
 

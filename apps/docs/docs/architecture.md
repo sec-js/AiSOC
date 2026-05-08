@@ -57,6 +57,24 @@ Additional capabilities introduced in 2026 H2:
 - **ChatOps verification** — HMAC-signed Slack/Teams interactive prompts for human-in-the-loop response actions.
 - **AI-vs-AI adversary eval** — deterministic attacker-LLM mutator for testing detection resilience.
 
+### v1.5 — market-driven additions (2026-05-07)
+
+The v1.5 release ships from a review of G2, Gartner Peer Insights, and customer feedback on AI SOC / SIEM / SOAR platforms. It adds five new agents, eight new console pages, four new API surfaces, and ten new connectors:
+
+- **Autonomous alert triage agents** — `services/agents/app/agents/auto_triage_agent.py` plus four sibling agents (phishing, identity, cloud, insider-threat) classify each alert as `true_positive` / `false_positive` / `benign` with a confidence score. Low-confidence noise auto-closes; the rest is escalated. Surfaced via `/api/v1/agents/triage`.
+- **Conversational investigation chat** — multi-turn copilot at `/investigate` that anchors on a case and reads its evidence, ledger, and entity graph for grounded follow-up Q&A. Component: `apps/web/src/components/copilot/InvestigationChat.tsx`.
+- **MITRE ATT&CK coverage advisor** — `/coverage-advisor` ranks technique gaps by adversary prevalence and recommends rules to close them.
+- **Shift handoff dashboard** — `/shifts` shows outgoing/incoming analysts the active cases, in-flight investigations, and queued approvals on one screen. Endpoints in `services/api/app/api/v1/endpoints/shifts.py`.
+- **EASM (External Attack Surface Management)** — `/easm` discovers assets, exposed services, and certificate-expiry risks for everything the org points at the public internet.
+- **MSSP executive dashboard** — `/mssp` rolls up KPIs, cross-tenant alert volumes, and per-customer SLA posture into a multi-tenant pane.
+- **Alert noise-tuning dashboard** — `/noise-tuning` surfaces per-rule false-positive rate, suppression candidates, and one-click tuning.
+- **Team analytics & gamification** — `/analytics/team` ships analyst leaderboard, MTTR per analyst, dispositions accuracy, and shift workload balance.
+- **STIX 2.1 / TAXII 2.1 publishing** — `services/api/app/api/v1/endpoints/stix_taxii.py` pushes the tenant's IOCs and threat-actor profiles to upstream / community feeds.
+- **Automated compliance evidence** — `services/api/app/api/v1/endpoints/compliance.py` collects point-in-time evidence for SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA.
+- **AI-generated incident reports** — one-click "Export Report" on every case generates a PDF incident report from the Investigation Ledger.
+- **Air-gap deployment configuration** — `services/api/app/api/v1/endpoints/deployment.py` exposes air-gap mode toggles for tenants that disallow external feeds.
+- **Ten new connectors** — SentinelOne, Cortex XDR, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, Duo Security; the catalog is now 26 connectors. See [Connectors](./connectors/).
+
 ## Connector polling and credential vault
 
 ```
@@ -157,8 +175,8 @@ AiSOC/
 
 | Service | Port | Language | Responsibility |
 |---------|------|----------|----------------|
-| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions, **Detection Proposals** (DAC lifecycle), **Federated Search** fan-out, SLA tracking |
-| `agents` | 8001 | Python (LangGraph) | Orchestrator + recon + forensic + responder + report-writer agents, playbook engine, ledger writes, **Hunt-as-Code** engine + scheduler |
+| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions, **Detection Proposals** (DAC lifecycle), **Federated Search** fan-out, SLA tracking, **Shifts** handoff, **STIX/TAXII** publishing, **Compliance evidence** collection, **Deployment / air-gap** configuration |
+| `agents` | 8001 | Python (LangGraph) | Orchestrator + recon + forensic + responder + report-writer agents, **autonomous triage agent** + phishing / identity / cloud / insider-threat sub-agents, **conversational investigation chat**, playbook engine, ledger writes, **Hunt-as-Code** engine + scheduler |
 | `realtime` | 8086 | TypeScript (Node.js) | WebSocket streaming of agent steps; **VAPID Web Push** delivery for the Responder PWA |
 | `ingest` | 8081 | Go | OCSF normalisation, Bloom-filter dedup, Kafka publish |
 | `enrichment` | 8080 | Go | Enrichment fan-out (IP, domain, hash, email, user) |

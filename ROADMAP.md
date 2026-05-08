@@ -116,6 +116,58 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
+## v6.1 — Shipped (2026-05-07) — v1.5 market-driven feature expansion
+
+A review of G2, Gartner Peer Insights, and customer feedback on AI SOC / SIEM /
+SOAR platforms drove this release.
+
+### New autonomous agents (`services/agents/app/agents/`)
+
+- [x] Master autonomous triage agent (`auto_triage_agent.py`) — classifies each
+      alert as `true_positive` / `false_positive` / `benign` with confidence
+- [x] Phishing triage sub-agent (`phishing_agent.py`)
+- [x] Identity reasoning sub-agent (`identity_agent.py`)
+- [x] Cloud reasoning sub-agent (`cloud_agent.py`)
+- [x] Insider-threat reasoning sub-agent (`insider_threat_agent.py`)
+- [x] All five exposed via `POST /api/v1/agents/triage`
+
+### New console pages (`apps/web/src/components/`)
+
+- [x] `/investigate` — conversational, multi-turn investigation copilot
+- [x] `/coverage-advisor` — MITRE ATT&CK gap ranking by adversary prevalence
+- [x] `/shifts` — analyst shift-handoff dashboard
+- [x] `/easm` — External Attack Surface Management
+- [x] `/mssp` — MSSP executive dashboard
+- [x] `/noise-tuning` — per-rule false-positive rate and one-click tuning
+- [x] `/analytics/team` — analyst leaderboard, MTTR per analyst, dispositions accuracy
+
+### New API surfaces (`services/api/app/api/v1/endpoints/`)
+
+- [x] `shifts.py` — shift-handoff CRUD
+- [x] `stix_taxii.py` — STIX 2.1 / TAXII 2.1 publishing
+- [x] `compliance.py` — automated compliance evidence (SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA)
+- [x] `deployment.py` — deployment / air-gap toggles
+
+### New connectors (16 → 26)
+
+- [x] SentinelOne (`sentinelone.py`)
+- [x] Cortex XDR (`cortex_xdr.py`)
+- [x] Wiz (`wiz.py`)
+- [x] Snyk (`snyk.py`)
+- [x] Zscaler (`zscaler.py`)
+- [x] Proofpoint (`proofpoint.py`)
+- [x] ServiceNow (`servicenow.py`)
+- [x] Jira (`jira.py`)
+- [x] 1Password (`1password.py`)
+- [x] Duo Security (`duo_security.py`)
+
+### Other
+
+- [x] AI-generated incident reports — one-click "Export Report" generates PDF from the Investigation Ledger
+- [x] Air-gap deployment configuration — per-tenant toggles disable external feeds
+
+---
+
 ## v7.0 — Planned
 
 - Mobile responder console (React Native) — triage and acknowledge from phone

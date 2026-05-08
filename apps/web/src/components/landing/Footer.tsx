@@ -112,7 +112,7 @@ export function Footer() {
             rel="noreferrer"
             className="font-mono hover:text-white"
           >
-            v6.0.0
+            v6.1.0
           </a>
         </div>
       </div>

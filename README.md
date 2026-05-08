@@ -9,7 +9,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/version-6.0.1-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
 [Live demo](https://tryaisoc.com) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
@@ -91,7 +91,7 @@ Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source:
 
 AiSOC bundles the components a SOC normally pieces together from separate vendors:
 
-- **Connect data sources in three clicks** — a click-and-connect catalog (Microsoft Entra, Azure Activity, Defender XDR, GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare, GitHub, plus the original CrowdStrike / Splunk / AWS Security Hub / Okta / Microsoft Sentinel set) renders a schema-driven form per connector, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
+- **Connect data sources in three clicks** — a 26-connector click-and-connect catalog spans EDR/XDR (CrowdStrike Falcon, SentinelOne, Microsoft Defender XDR, Palo Alto Cortex XDR), SIEM (Splunk, Microsoft Sentinel, Elastic), cloud (AWS Security Hub, Azure Activity, GCP Cloud Audit, GCP SCC, Wiz), identity (Okta, Microsoft Entra, Duo Security, 1Password), SaaS (Microsoft 365 audit, Google Workspace, Cloudflare, Proofpoint, ServiceNow, Jira), VCS (GitHub, Snyk), and network (Tailscale, Zscaler). Each connector renders a schema-driven form, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
 - **Ingest** events from any connector into a Kafka spine.
 - **Correlate** them in real time with deduplication, ML scoring, per-alert confidence scoring, and Sigma/YARA detection.
 - **Roll up signal onto entities** — Risk-Based Alerting accumulates time-decayed risk points on the user, host, IP, and domain each alert touches, promotes them to entity-incidents at a tunable threshold, and surfaces an entity-centric queue in the alerts UI. Hits the published 2026 KPI bar of ≥ 50:1 alert-to-incident ratio (CI-gated in [`services/fusion/tests/test_entity_risk.py`](services/fusion/tests/test_entity_risk.py)).
@@ -129,6 +129,22 @@ AiSOC bundles the components a SOC normally pieces together from separate vendor
 - **Hypothesis-driven hunt workbench** — define a hunt hypothesis in natural language (`POST /hunts`); the API auto-generates ready-to-execute queries in ES|QL, SPL, and KQL; analysts record findings against any run and the workbench tracks open, completed, and inconclusive hunts.
 - **Phishing triage workflow** — submit raw email text, URLs, attachments, or domain indicators (`POST /phishing/submit`); the LLM extracts IOCs, assigns a verdict (phishing / benign / spam / malware / unknown), maps to MITRE ATT&CK, and optionally links the submission to an existing case.
 - **Knowledge-base + RAG** — ingest runbooks, policies, SOPs, and wikis (`POST /kb/ingest`); the API chunks and full-text indexes each document; analysts query with natural language (`POST /kb/query`) and receive the top matching chunks plus an LLM-synthesised answer with citation, backed by PostgreSQL FTS when no vector store is configured.
+
+### v1.5 — market-driven additions (2026-05-07)
+
+- **Autonomous alert triage agent** — a dedicated LLM agent in `services/agents/app/agents/auto_triage_agent.py` classifies incoming alerts as `true_positive`, `false_positive`, or `benign` with confidence scores, auto-closing low-confidence noise and escalating the rest. Backed by four sibling agents — phishing, identity, cloud, and insider-threat — each tuned to its domain.
+- **Conversational investigation chat** — multi-turn chat surface at `/investigate` lets analysts ask follow-up questions over the case, evidence, and ledger context without round-tripping through new tickets. Component: `apps/web/src/components/copilot/InvestigationChat.tsx`.
+- **MITRE ATT&CK coverage advisor** — surfaces the highest-impact gaps in detection coverage (technique-by-technique) and recommends rules to close them, ranked by adversary prevalence and risk. Page: `/coverage-advisor`.
+- **Shift handoff dashboard** — outgoing/incoming analysts see active cases, in-flight investigations, and queued approvals on one screen. Endpoints in `services/api/app/api/v1/endpoints/shifts.py`. Page: `/shifts`.
+- **EASM (External Attack Surface Management)** — asset discovery, exposed-service inventory, and certificate-expiry monitor for everything the org has accidentally pointed at the public internet. Page: `/easm`.
+- **MSSP executive dashboard** — multi-tenant rollup: KPIs, cross-tenant alert volumes, and per-customer SLA posture in one pane. Page: `/mssp`.
+- **Alert noise tuning dashboard** — per-rule false-positive rate, suppression candidates, and one-click tuning suggestions. Page: `/noise-tuning`.
+- **Team analytics & gamification** — analyst leaderboard, MTTR per analyst, dispositions accuracy, and shift workload balance. Page: `/analytics/team`.
+- **STIX 2.1 / TAXII 2.1 publishing** — push the tenant's IOCs and threat-actor profiles to upstream / community feeds via `services/api/app/api/v1/endpoints/stix_taxii.py`.
+- **Automated compliance evidence** — point-in-time evidence collection for SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA via `services/api/app/api/v1/endpoints/compliance.py`; surfaces in the Compliance dashboard.
+- **AI-generated incident reports** — one-click "Export Report" on every case generates a PDF incident report from the Investigation Ledger.
+- **Ten new connectors** — SentinelOne, Cortex XDR, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, and Duo Security; bringing the total catalog to 26.
+- **Air-gap deployment configuration** — `services/api/app/api/v1/endpoints/deployment.py` exposes air-gap mode toggles for tenants that disallow external feeds.
 
 Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 
@@ -329,6 +345,13 @@ The console fuses the analyst's day-zero workflow into one surface:
 - **SLA Dashboard** — MTTD, MTTR, MTTC metrics + breach alerts.
 - **Audit Log** — immutable, paginated, tenant-scoped event history.
 - **Benchmark** — public eval harness (alert-reduction measurement plus three substrate self-consistency gates), run in CI.
+- **Investigation Chat** — multi-turn conversational copilot at `/investigate` for case-scoped follow-up Q&A.
+- **Coverage Advisor** — MITRE ATT&CK coverage gap finder with prioritized rule recommendations.
+- **Shifts** — outgoing/incoming analyst handoff dashboard with active cases and queued approvals.
+- **EASM** — external attack surface inventory: assets, exposed services, certificate-expiry monitor.
+- **Noise Tuning** — per-rule false-positive analytics and one-click tuning suggestions.
+- **MSSP Dashboard** — multi-tenant executive rollup with cross-tenant KPIs and SLA posture.
+- **Team Analytics** — analyst leaderboard, MTTR per analyst, disposition accuracy, shift load balance.
 - **Settings → RBAC** — roles, permissions, and user-role assignments.
 - **Ambient Copilot** — context-aware next-action suggestions on alert, case, rule, and playbook pages. Each suggestion runs the right tool with the right payload.
 - **AI Copilot dock** — slide-over invoked with `⌘J` for any page.
@@ -796,11 +819,11 @@ terraform apply
 
 ## Roadmap
 
-The public roadmap lives in [ROADMAP.md](ROADMAP.md). The v4.1, v5.0, v5.1, and v5.2 items have shipped (Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, and the one-shot demo). Next:
+The public roadmap lives in [ROADMAP.md](ROADMAP.md). The v4.1, v5.0, v5.1, v5.2, and v6.0 items have shipped (Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, and the one-shot demo). The v6.1 market-driven feature expansion has shipped (autonomous triage agents, investigation chat, coverage advisor, shifts, EASM, MSSP dashboard, noise tuning, team analytics, STIX/TAXII publishing, automated compliance evidence, AI-generated incident reports, ten new connectors). Next:
 
-- v6.0 — Agent-authored detections with human-in-the-loop review
-- v6.1 — Federated threat intel sharing across self-hosted instances
-- v6.2 — Multi-region active-active with CRDTs for case sync
+- v6.2 — Federated threat intel sharing across self-hosted instances
+- v6.3 — Multi-region active-active with CRDTs for case sync
+- v6.4 — Agent-authored detections with human-in-the-loop review
 
 ---
 

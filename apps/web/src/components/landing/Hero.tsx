@@ -30,7 +30,7 @@ export function Hero() {
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
             Every agent prompt, tool call, and decision is recorded in an investigation
-            ledger and replayable per case. Click-and-connect 16 security sources with
+            ledger and replayable per case. Click-and-connect 26 security sources with
             encrypted credentials, entity risk-based alerting, NL detection authoring,
             federated search across SIEMs, hypothesis-driven hunting, confidence scoring,
             detection drift tracking, and a knowledge-base RAG over your runbooks — all
@@ -77,7 +77,7 @@ export function Hero() {
           {/* Three facts the buyer can verify in the repo: ledger writes, the
               eval harness, and the license. */}
           <dl className="mt-10 grid grid-cols-4 gap-5 border-t border-white/5 pt-8">
-            <Stat label="Connectors" value="16" caption="cloud, SIEM, IAM, SaaS — encrypted at rest" />
+            <Stat label="Connectors" value="26" caption="EDR, SIEM, cloud, IAM, SaaS — encrypted at rest" />
             <Stat label="Agent decisions" value="Ledger" caption="prompt + tool + rationale per step" />
             <Stat label="Eval harness" value="200 cases" caption="runs in CI on every PR to main" />
             <Stat label="License" value="MIT" caption="audit, fork, self-host" />

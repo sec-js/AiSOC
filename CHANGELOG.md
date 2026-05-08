@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0] — 2026-05-07
+
+### Added — v1.5 market-driven feature expansion
+
+A review of G2, Gartner Peer Insights, and customer feedback on AI SOC / SIEM /
+SOAR platforms drove this release. Five new agents, eight new console pages,
+four new API surfaces, and ten new connectors landed at once. Connector catalog
+goes from 16 → **26**.
+
+#### New autonomous agents (`services/agents/app/agents/`)
+
+- **`auto_triage_agent.py`** — Master triage agent classifies each incoming alert
+  as `true_positive` / `false_positive` / `benign` with a confidence score.
+  Low-confidence noise auto-closes; everything else escalates with rationale.
+- **`phishing_agent.py`** — Specialised phishing triage: header analysis, URL
+  reputation, attachment sandboxing summary, sender-domain trust.
+- **`identity_agent.py`** — Identity-centric reasoning: impossible travel,
+  privilege escalation, MFA bypass, and session-token anomaly classification.
+- **`cloud_agent.py`** — Cloud posture / threat reasoning across AWS, Azure,
+  GCP, and Kubernetes signals.
+- **`insider_threat_agent.py`** — Behavioural deviation, peer-group scoring,
+  exfiltration intent classification.
+- All five are exposed via `POST /api/v1/agents/triage`.
+
+#### New console pages (`apps/web/src/components/`)
+
+- **`/investigate`** — Conversational, multi-turn copilot anchored on a case;
+  reads its evidence, ledger, and entity graph for grounded follow-up Q&A.
+  Component: `copilot/InvestigationChat.tsx`.
+- **`/coverage-advisor`** — Ranks MITRE ATT&CK technique gaps by adversary
+  prevalence and recommends rules to close them.
+  Component: `coverage/CoverageAdvisorView.tsx`.
+- **`/shifts`** — Outgoing/incoming analyst handoff dashboard: active cases,
+  in-flight investigations, queued approvals on one screen.
+  Component: `shifts/ShiftsView.tsx`.
+- **`/easm`** — External Attack Surface Management: discovers public assets,
+  exposed services, and certificate-expiry risks.
+  Component: `easm/EASMView.tsx`.
+- **`/mssp`** — MSSP executive dashboard: KPIs, cross-tenant alert volume, and
+  per-customer SLA posture. Component: `mssp/MSSPDashboardView.tsx`.
+- **`/noise-tuning`** — Per-rule false-positive rate, suppression candidates,
+  one-click tuning. Component: `noise/NoiseTuningView.tsx`.
+- **`/analytics/team`** — Analyst leaderboard, MTTR per analyst, dispositions
+  accuracy, and shift workload balance.
+  Component: `analytics/TeamAnalyticsView.tsx`.
+
+#### New API surfaces (`services/api/app/api/v1/endpoints/`)
+
+- **`shifts.py`** — Shift-handoff CRUD: list active shifts, post handoff
+  notes, view queued approvals scoped to a shift window.
+- **`stix_taxii.py`** — STIX 2.1 / TAXII 2.1 publishing; pushes the tenant's
+  IOCs and threat-actor profiles to upstream / community feeds.
+- **`compliance.py`** — Automated compliance evidence collection for SOC 2,
+  ISO 27001, NIST CSF, PCI-DSS, HIPAA, and DORA. One-click evidence pull.
+- **`deployment.py`** — Deployment / air-gap toggles; tenants that disallow
+  external feeds can flip air-gap mode here.
+
+#### New connectors (`services/connectors/app/connectors/`)
+
+EDR / XDR: `sentinelone.py`, `cortex_xdr.py`. Cloud security: `wiz.py`,
+`snyk.py`. Network: `zscaler.py`. SaaS / email: `proofpoint.py`,
+`servicenow.py`, `jira.py`. Identity: `1password.py`, `duo_security.py`.
+All ten registered in `services/connectors/app/connectors/__init__.py`,
+all ship a marketplace manifest under `plugins/<id>/plugin.yaml`, all
+collapse vendor severity to the standard four-tier ladder.
+
+#### Other
+
+- **AI-generated incident reports** — Every case now has a one-click "Export
+  Report" button that generates a PDF incident report from the Investigation
+  Ledger.
+- **Air-gap deployment configuration** — Per-tenant toggles disable external
+  feeds (threat intel, marketplace sync, push notifications) for fully
+  air-gapped deployments.
+
+### Changed
+
+- Connector catalog count **16 → 26**. Landing page hero stat, layout SEO
+  metadata, and `apps/docs/docs/connectors/index.md` updated to reflect.
+- `apps/docs/docs/architecture.md` adds a v1.5 section and updates the
+  service-responsibilities table to include the new API surfaces and
+  autonomous agents.
+- `apps/docs/docs/intro.md` updated to mention the new connector count and
+  v1.5 features.
+- Footer release link now points at `v6.1.0`.
+
 ## [6.0.1] — 2026-05-06
 
 ### Security

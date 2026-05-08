@@ -241,7 +241,7 @@ export function DashboardView() {
           <div>
             <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Entity-risk alerting, confidence-scored triage, and 16 connected sources
+              Entity-risk alerting, confidence-scored triage, and 26 connected sources
             </p>
           </div>
         </div>
