@@ -245,7 +245,11 @@ function CoverageHeatmap() {
   }
 
   const resolved = data ?? MOCK_COVERAGE
-  const { summary, tactics, techniques } = resolved
+  const {
+    summary = MOCK_COVERAGE.summary,
+    tactics = MOCK_COVERAGE.tactics,
+    techniques = MOCK_COVERAGE.techniques,
+  } = resolved
 
   // Index drift status by technique_id for O(1) lookup while rendering cells.
   const driftByTid = new Map<string, DriftTechnique>()
