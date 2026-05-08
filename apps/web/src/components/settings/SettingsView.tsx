@@ -101,8 +101,9 @@ const DEFAULT_PROFILE: ProfileData = {
 
 // ─── Demo fallbacks ───────────────────────────────────────────────────────────
 
-const NOW = Date.now();
-const ago = (mins: number) => new Date(NOW - mins * 60 * 1000).toISOString();
+// Deterministic base — no Date.now() to avoid SSR hydration mismatches.
+const MOCK_BASE = new Date('2026-05-06T12:00:00Z').getTime();
+const ago = (mins: number) => new Date(MOCK_BASE - mins * 60 * 1000).toISOString();
 
 const DEMO_CONNECTORS: Connector[] = [
   {
@@ -822,7 +823,7 @@ function IntegrationsPanel() {
                         <span className="font-mono">{c.type}</span>
                       </span>
                       {c.lastSync ? (
-                        <span>
+                        <span suppressHydrationWarning>
                           Last sync{' '}
                           {formatDistanceToNow(new Date(c.lastSync), {
                             addSuffix: true,
@@ -1040,10 +1041,10 @@ function ApiKeysPanel() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                    <td className="px-4 py-3 text-xs text-gray-400" suppressHydrationWarning>
                       {format(new Date(k.createdAt), 'PPP')}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                    <td className="px-4 py-3 text-xs text-gray-400" suppressHydrationWarning>
                       {k.lastUsedAt
                         ? formatDistanceToNow(new Date(k.lastUsedAt), {
                             addSuffix: true,
@@ -1301,7 +1302,7 @@ function AuditPanel() {
                 <span className="text-gray-400">{a.action}</span>{' '}
                 <span>{a.target}</span>
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500" suppressHydrationWarning>
                 {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
               </p>
             </div>

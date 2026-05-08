@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
+// Deterministic mock data — no Date.now() or Math.random() to avoid SSR hydration mismatches.
+const MOCK_CASE_BASE = new Date('2026-05-06T12:00:00Z').getTime();
 const MOCK_CASES: Case[] = Array.from({ length: 18 }, (_, i) => ({
   id: `case-${1000 + i}`,
   title: [
@@ -26,9 +28,9 @@ const MOCK_CASES: Case[] = Array.from({ length: 18 }, (_, i) => ({
   status: (['open', 'in_progress', 'resolved', 'closed'] as Case['status'][])[i % 4],
   severity: (['critical', 'high', 'medium', 'low'] as Case['severity'][])[i % 4],
   assignee: ['alice@company.com', 'bob@company.com', 'carol@company.com', undefined][i % 4],
-  alertCount: Math.floor(Math.random() * 30) + 1,
-  createdAt: new Date(Date.now() - i * 7200000).toISOString(),
-  updatedAt: new Date(Date.now() - i * 1800000).toISOString(),
+  alertCount: ((i * 13 + 7) % 30) + 1,
+  createdAt: new Date(MOCK_CASE_BASE - i * 7200000).toISOString(),
+  updatedAt: new Date(MOCK_CASE_BASE - i * 1800000).toISOString(),
   tags: [['ransomware', 'finance'], ['apt', 'lateral'], ['credential', 'portal'], ['exfil', 'cloud']][i % 4],
 }));
 
@@ -86,7 +88,7 @@ function CaseCard({ c }: { c: Case }) {
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-xs text-gray-500">{format(new Date(c.createdAt), 'MMM dd, HH:mm')}</p>
+            <p className="text-xs text-gray-500" suppressHydrationWarning>{format(new Date(c.createdAt), 'MMM dd, HH:mm')}</p>
             {c.tags && c.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2 justify-end">
                 {c.tags.slice(0, 2).map((tag) => (

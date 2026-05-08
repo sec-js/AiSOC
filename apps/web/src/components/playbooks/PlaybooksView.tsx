@@ -7,7 +7,7 @@
  * a Run History tab, and a Community tab for browsing/installing community playbooks.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import useSWR, { mutate } from 'swr';
 import clsx from 'clsx';
@@ -128,7 +128,11 @@ function RunHistoryTab() {
     { refreshInterval: 10000 }
   );
   if (isLoading) return <div className="py-10 text-center text-gray-600 text-sm">Loading run history…</div>;
-  if (error) return <div className="py-4 text-red-400 text-sm">Failed to load run history.</div>;
+  if (error) return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+      Run history unavailable — the agents service may be offline.
+    </div>
+  );
   if (!data || data.length === 0)
     return (
       <div className="flex flex-col items-center py-20 text-gray-700">
@@ -148,7 +152,7 @@ function RunHistoryTab() {
               <span className="font-mono">{run.run_id.slice(0, 12)}…</span>
               <span>{run.steps.length} steps</span>
               {run.dry_run && <span className="text-yellow-700 border border-yellow-900 px-1.5 rounded">dry run</span>}
-              {run.started_at && <span>{new Date(run.started_at).toLocaleString()}</span>}
+              {run.started_at && <span suppressHydrationWarning>{new Date(run.started_at).toLocaleString()}</span>}
             </div>
           </div>
           {/* Step progress dots */}
@@ -205,6 +209,7 @@ function CommunityPlaybooksTab() {
       const params = new URLSearchParams({ page: String(p), page_size: String(PAGE_SIZE), sort_by: sort });
       if (q) params.set('search', q);
       const res = await fetch(`/api/v1/community/playbooks?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(data.items ?? []);
       setTotal(data.total ?? 0);
@@ -215,8 +220,7 @@ function CommunityPlaybooksTab() {
     }
   }, []);
 
-  // Load on first render
-  useState(() => { load(search, sortBy, page); });
+  useEffect(() => { load(search, sortBy, page); }, []);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -234,6 +238,12 @@ function CommunityPlaybooksTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!res.ok && res.headers.get('content-type')?.includes('json')) {
+        const err = await res.json();
+        setSubmitResult(`Error: ${err.detail ?? res.statusText}`);
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSubmitResult(res.ok ? `Submitted! ID: ${data.id} — Status: ${data.status}` : `Error: ${data.detail}`);
       if (res.ok) { setSubmitJson(''); load(search, sortBy, page); }
@@ -326,7 +336,11 @@ function CommunityPlaybooksTab() {
       )}
 
       {loading && <div className="py-12 text-center text-sm text-zinc-500">Loading community playbooks…</div>}
-      {error && <div className="rounded-lg border border-red-700/40 bg-red-900/20 p-4 text-sm text-red-300">{error}</div>}
+      {error && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+            {error}
+          </div>
+        )}
 
       {!loading && !error && items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-500 text-sm">
@@ -413,12 +427,42 @@ function CommunityPlaybookCard({ playbook }: { playbook: CommunityPlaybook }) {
   );
 }
 
+/* ─────────────────────────── Mock Data ─────────────────────────── */
+
+const MOCK_PLAYBOOKS: Playbook[] = [
+  {
+    id: 'pb-001', name: 'Phishing Triage', description: 'Automated triage for phishing alerts — extracts IOCs, checks reputation, and escalates confirmed threats.',
+    version: '1.3', tags: ['phishing', 'email', 'triage'], author: 'soc-team',
+    trigger: { on: 'alert', severity: ['high', 'critical'], tags: ['phishing'] },
+    steps: [], enabled: true, created_at: '2026-04-15T10:00:00Z', updated_at: '2026-05-01T08:30:00Z',
+  },
+  {
+    id: 'pb-002', name: 'Endpoint Isolation', description: 'Isolates a compromised endpoint via EDR API, creates a case, and notifies the IR channel.',
+    version: '2.0', tags: ['edr', 'isolation', 'response'], author: 'ir-lead',
+    trigger: { on: 'manual' },
+    steps: [], enabled: true, created_at: '2026-03-20T14:00:00Z', updated_at: '2026-04-28T16:00:00Z',
+  },
+  {
+    id: 'pb-003', name: 'Identity Compromise', description: 'Responds to suspicious identity events — resets credentials, revokes sessions, and enriches with threat intel.',
+    version: '1.1', tags: ['identity', 'iam', 'credential-reset'], author: 'soc-team',
+    trigger: { on: 'alert', severity: ['critical'], tags: ['identity'] },
+    steps: [], enabled: true, created_at: '2026-04-01T09:00:00Z', updated_at: '2026-05-04T12:00:00Z',
+  },
+  {
+    id: 'pb-004', name: 'Cloud IAM Audit', description: 'Periodic audit of IAM roles and policies across AWS, GCP, and Azure — flags over-privileged accounts.',
+    version: '1.0', tags: ['cloud', 'iam', 'audit'], author: 'cloud-sec',
+    trigger: { on: 'schedule', cron: '0 6 * * 1' },
+    steps: [], enabled: false, created_at: '2026-02-10T11:00:00Z', updated_at: '2026-04-20T15:00:00Z',
+  },
+];
+
 /* ─────────────────────────── Main ─────────────────────────── */
 
 export function PlaybooksView() {
   const [tab, setTab] = useState<'playbooks' | 'runs' | 'community'>('playbooks');
   const { data, isLoading, error } = useSWR<Playbook[]>('/api/v1/playbooks', fetcher, {
     refreshInterval: 30000,
+    fallbackData: MOCK_PLAYBOOKS,
   });
 
   return (
@@ -473,8 +517,8 @@ export function PlaybooksView() {
           {isLoading && <div className="text-gray-600 text-sm">Loading playbooks…</div>}
 
           {error && (
-            <div className="bg-red-950/40 border border-red-900 rounded-lg px-4 py-3 text-red-400 text-sm">
-              Failed to load playbooks. Is the agents service running?
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+              Agents API unreachable — showing demo playbooks so you can explore the workflow.
             </div>
           )}
 

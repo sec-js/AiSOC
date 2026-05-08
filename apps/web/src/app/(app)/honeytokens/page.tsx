@@ -9,7 +9,11 @@ import useSWR, { mutate } from "swr";
 const API = process.env.NEXT_PUBLIC_HONEYTOKENS_URL ?? "";
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 
 type TokenStatus = "active" | "triggered" | "expired" | "revoked";
 
@@ -47,10 +51,10 @@ const TOKEN_TYPES = [
 ];
 
 const STATUS_COLORS: Record<TokenStatus, string> = {
-  active: "bg-green-100 text-green-800",
-  triggered: "bg-red-100 text-red-800",
-  expired: "bg-gray-100 text-gray-700",
-  revoked: "bg-yellow-100 text-yellow-800",
+  active: "bg-green-900/40 text-green-300",
+  triggered: "bg-red-900/40 text-red-300",
+  expired: "bg-gray-800 text-gray-400",
+  revoked: "bg-yellow-900/40 text-yellow-300",
 };
 
 function TokenRow({
@@ -65,11 +69,11 @@ function TokenRow({
   onSelect: (id: string) => void;
 }) {
   return (
-    <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => onSelect(token.id)}>
-      <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-xs truncate">
+    <tr className="hover:bg-gray-800/50 cursor-pointer" onClick={() => onSelect(token.id)}>
+      <td className="px-4 py-3 text-sm font-medium text-gray-100 max-w-xs truncate">
         {token.name}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-600">{token.token_type}</td>
+      <td className="px-4 py-3 text-sm text-gray-400">{token.token_type}</td>
       <td className="px-4 py-3">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[token.status]}`}
@@ -77,10 +81,10 @@ function TokenRow({
           {token.status}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500">
+      <td className="px-4 py-3 text-sm text-gray-500" suppressHydrationWarning>
         {token.expires_at ? new Date(token.expires_at).toLocaleDateString() : "—"}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500">
+      <td className="px-4 py-3 text-sm text-gray-500" suppressHydrationWarning>
         {new Date(token.created_at).toLocaleDateString()}
       </td>
       <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
@@ -88,14 +92,14 @@ function TokenRow({
           {token.status === "active" && (
             <button
               onClick={() => onRevoke(token.id)}
-              className="text-yellow-600 hover:text-yellow-800 text-xs"
+              className="text-yellow-400 hover:text-yellow-300 text-xs"
             >
               Revoke
             </button>
           )}
           <button
             onClick={() => onDelete(token.id)}
-            className="text-red-600 hover:text-red-800 text-xs"
+            className="text-red-400 hover:text-red-300 text-xs"
           >
             Delete
           </button>
@@ -146,31 +150,31 @@ function CreateTokenModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Create Honeytoken</h2>
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-md p-6">
+        <h2 className="text-lg font-semibold text-gray-100 mb-4">Create Honeytoken</h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Name *</label>
             <input
-              className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. AWS Prod Key – Finance"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
             <textarea
-              className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Token Type *</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Token Type *</label>
             <select
-              className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               value={tokenType}
               onChange={(e) => setTokenType(e.target.value)}
             >
@@ -182,21 +186,21 @@ function CreateTokenModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-400 mb-1">
               TTL (days)
             </label>
             <input
               type="number"
-              className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               value={ttlDays}
               onChange={(e) => setTtlDays(Number(e.target.value))}
               min={1}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200">
             Cancel
           </button>
           <button
@@ -221,10 +225,10 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[80vh] flex flex-col">
+      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-2xl p-6 max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Trigger History</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-lg">
+          <h2 className="text-lg font-semibold text-gray-100">Trigger History</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg">
             ✕
           </button>
         </div>
@@ -235,35 +239,35 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
         ) : (
           <div className="overflow-y-auto flex-1">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-800 sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Triggered</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Source IP</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Threat Score</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Alert Sent</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-400">Triggered</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-400">Source IP</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-400">Threat Score</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-400">Alert Sent</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-800">
                 {triggers.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 text-gray-700">
+                  <tr key={t.id} className="hover:bg-gray-800/50">
+                    <td className="px-3 py-2 text-gray-300" suppressHydrationWarning>
                       {new Date(t.triggered_at).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{t.source_ip ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-400">{t.source_ip ?? "—"}</td>
                     <td className="px-3 py-2">
                       {t.threat_score != null ? (
                         <span
-                          className={`font-medium ${t.threat_score > 70 ? "text-red-600" : "text-yellow-600"}`}
+                          className={`font-medium ${t.threat_score > 70 ? "text-red-400" : "text-yellow-400"}`}
                         >
                           {t.threat_score.toFixed(0)}
                         </span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-500">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.alert_sent ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.alert_sent ? "bg-green-900/40 text-green-300" : "bg-gray-800 text-gray-400"}`}
                       >
                         {t.alert_sent ? "Yes" : "No"}
                       </span>
@@ -316,7 +320,7 @@ export default function HoneytokensPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Honeytokens</h1>
+          <h1 className="text-2xl font-bold text-gray-100">Honeytokens</h1>
           <p className="text-sm text-gray-500 mt-1">
             Deploy deception tokens and get alerted on first access.
           </p>
@@ -332,12 +336,12 @@ export default function HoneytokensPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Total", value: counts.total, color: "text-gray-900" },
-          { label: "Active", value: counts.active, color: "text-green-600" },
-          { label: "Triggered", value: counts.triggered, color: "text-red-600" },
-          { label: "Revoked", value: counts.revoked, color: "text-yellow-600" },
+          { label: "Total", value: counts.total, color: "text-gray-100" },
+          { label: "Active", value: counts.active, color: "text-green-400" },
+          { label: "Triggered", value: counts.triggered, color: "text-red-400" },
+          { label: "Revoked", value: counts.revoked, color: "text-yellow-400" },
         ].map((s) => (
-          <div key={s.label} className="bg-white border rounded-lg p-4">
+          <div key={s.label} className="bg-gray-900/60 border border-gray-700 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</p>
             <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
           </div>
@@ -347,7 +351,7 @@ export default function HoneytokensPage() {
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <select
-          className="border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
@@ -358,7 +362,7 @@ export default function HoneytokensPage() {
           <option value="revoked">Revoked</option>
         </select>
         <select
-          className="border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          className="border border-gray-600 bg-gray-800 text-gray-200 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
         >
@@ -372,7 +376,7 @@ export default function HoneytokensPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-gray-900/60 border border-gray-700 rounded-lg overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-sm text-gray-500">Loading tokens…</div>
         ) : !tokens?.length ? (
@@ -381,17 +385,17 @@ export default function HoneytokensPage() {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-gray-800 border-b border-gray-700">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Type</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Expires</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Created</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Actions</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Name</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Type</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Expires</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Created</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-400">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-800">
               {tokens.map((token) => (
                 <TokenRow
                   key={token.id}

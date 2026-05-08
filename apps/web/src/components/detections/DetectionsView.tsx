@@ -18,8 +18,9 @@ import { ContributorLeaderboard } from './ContributorLeaderboard';
 
 // ─── Demo fallback ────────────────────────────────────────────────────────────
 
-const NOW = Date.now();
-const ago = (mins: number) => new Date(NOW - mins * 60 * 1000).toISOString();
+// Deterministic base — no Date.now() to avoid SSR hydration mismatches.
+const MOCK_BASE = new Date('2026-05-06T12:00:00Z').getTime();
+const ago = (mins: number) => new Date(MOCK_BASE - mins * 60 * 1000).toISOString();
 
 const SAMPLE_SIGMA = `title: Suspicious PowerShell Encoded Command
 id: aisoc-rule-001
@@ -465,7 +466,7 @@ function RuleCard({ rule, onToggle }: RuleCardProps) {
               </span>{' '}
               hits
             </div>
-            <div className="mt-0.5">
+            <div className="mt-0.5" suppressHydrationWarning>
               {rule.lastTriggeredAt
                 ? `last fired ${formatDistanceToNow(new Date(rule.lastTriggeredAt), { addSuffix: true })}`
                 : 'no recent hits'}

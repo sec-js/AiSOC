@@ -154,8 +154,8 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
       <div className="flex items-center gap-4">
         {/* Clock */}
         <div className="text-right hidden lg:block">
-          <p className="text-sm font-mono text-gray-300">{timeStr}</p>
-          <p className="text-xs text-gray-500">{dateStr}</p>
+          <p className="text-sm font-mono text-gray-300" suppressHydrationWarning>{timeStr}</p>
+          <p className="text-xs text-gray-500" suppressHydrationWarning>{dateStr}</p>
         </div>
 
         {/* Notifications */}

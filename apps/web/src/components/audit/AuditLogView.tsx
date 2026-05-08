@@ -24,23 +24,44 @@ interface AuditListResponse {
   total_pages: number;
 }
 
-const fetcher = (url: string) =>
-  fetch(url, { credentials: 'include' }).then((r) => {
-    if (!r.ok) throw new Error('Failed to fetch');
-    return r.json();
-  });
+const fetcher = async (url: string) => {
+  const r = await fetch(url, { credentials: 'include' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { throw new Error('Invalid JSON'); }
+};
+
+const MOCK_AUDIT: AuditListResponse = {
+  items: [
+    { id: '1', tenant_id: 't1', actor_id: 'u1', actor_email: 'admin@acme.io', actor_ip: '10.0.1.12', action: 'cases:create', resource: 'case', resource_id: 'c-0001abcd', changes: { title: 'Suspicious lateral movement' }, created_at: new Date(Date.now() - 300_000).toISOString() },
+    { id: '2', tenant_id: 't1', actor_id: 'u2', actor_email: 'analyst@acme.io', actor_ip: '10.0.1.15', action: 'alerts:update', resource: 'alert', resource_id: 'a-0042efgh', changes: { status: ['open', 'acknowledged'] }, created_at: new Date(Date.now() - 900_000).toISOString() },
+    { id: '3', tenant_id: 't1', actor_id: null, actor_email: null, actor_ip: null, action: 'playbooks:execute', resource: 'playbook', resource_id: 'pb-isolate', changes: { trigger: 'auto' }, created_at: new Date(Date.now() - 1_800_000).toISOString() },
+    { id: '4', tenant_id: 't1', actor_id: 'u1', actor_email: 'admin@acme.io', actor_ip: '10.0.1.12', action: 'detections:create', resource: 'detection_rule', resource_id: 'dr-00091234', changes: { name: 'Brute-force SSH' }, created_at: new Date(Date.now() - 3_600_000).toISOString() },
+    { id: '5', tenant_id: 't1', actor_id: 'u3', actor_email: 'soc-lead@acme.io', actor_ip: '10.0.2.5', action: 'connectors:update', resource: 'connector', resource_id: 'cn-sentinel', changes: { enabled: true }, created_at: new Date(Date.now() - 7_200_000).toISOString() },
+    { id: '6', tenant_id: 't1', actor_id: 'u1', actor_email: 'admin@acme.io', actor_ip: '10.0.1.12', action: 'roles:create', resource: 'role', resource_id: 'role-jr-analyst', changes: { name: 'Junior Analyst' }, created_at: new Date(Date.now() - 10_800_000).toISOString() },
+    { id: '7', tenant_id: 't1', actor_id: 'u2', actor_email: 'analyst@acme.io', actor_ip: '10.0.1.15', action: 'cases:update', resource: 'case', resource_id: 'c-0001abcd', changes: { status: ['open', 'in_progress'] }, created_at: new Date(Date.now() - 14_400_000).toISOString() },
+    { id: '8', tenant_id: 't1', actor_id: 'u1', actor_email: 'admin@acme.io', actor_ip: '10.0.1.12', action: 'auth:api_key_create', resource: 'api_key', resource_id: 'ak-00abc', changes: null, created_at: new Date(Date.now() - 21_600_000).toISOString() },
+    { id: '9', tenant_id: 't1', actor_id: null, actor_email: null, actor_ip: null, action: 'alerts:create', resource: 'alert', resource_id: 'a-0099xyz', changes: { severity: 'critical' }, created_at: new Date(Date.now() - 28_800_000).toISOString() },
+    { id: '10', tenant_id: 't1', actor_id: 'u3', actor_email: 'soc-lead@acme.io', actor_ip: '10.0.2.5', action: 'cases:delete', resource: 'case', resource_id: 'c-test-0001', changes: null, created_at: new Date(Date.now() - 36_000_000).toISOString() },
+  ],
+  total: 10,
+  page: 1,
+  page_size: 50,
+  total_pages: 1,
+};
 
 const ACTION_COLORS: Record<string, string> = {
-  create: 'bg-green-100 text-green-800',
-  update: 'bg-blue-100 text-blue-800',
-  delete: 'bg-red-100 text-red-800',
+  create: 'bg-green-500/20 text-green-300',
+  update: 'bg-blue-500/20 text-blue-300',
+  delete: 'bg-red-500/20 text-red-300',
+  execute: 'bg-yellow-500/20 text-yellow-300',
 };
 
 function actionBadge(action: string): string {
   for (const [verb, cls] of Object.entries(ACTION_COLORS)) {
     if (action.includes(verb)) return cls;
   }
-  return 'bg-gray-100 text-gray-700';
+  return 'bg-gray-700 text-gray-300';
 }
 
 export function AuditLogView() {
@@ -55,11 +76,13 @@ export function AuditLogView() {
   if (actionFilter) params.set('action', actionFilter);
   if (resourceFilter) params.set('resource', resourceFilter);
 
-  const { data, error, isLoading } = useSWR<AuditListResponse>(
+  const { data: raw, error } = useSWR<AuditListResponse>(
     `/api/v1/audit?${params}`,
     fetcher,
-    { refreshInterval: 30_000 }
+    { refreshInterval: 30_000, fallbackData: MOCK_AUDIT, shouldRetryOnError: false, errorRetryCount: 0, revalidateOnFocus: false }
   );
+  const isValid = raw && Array.isArray(raw.items) && typeof raw.total === 'number';
+  const data = isValid ? raw : MOCK_AUDIT;
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -70,8 +93,8 @@ export function AuditLogView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Audit Log</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold">Audit Log</h1>
+          <p className="text-sm text-gray-400 mt-1">
             Immutable record of all platform actions
           </p>
         </div>
@@ -85,19 +108,19 @@ export function AuditLogView() {
       {/* Filters */}
       <form
         onSubmit={handleSearch}
-        className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+        className="flex flex-wrap gap-3 bg-gray-800/50 p-4 rounded-lg border border-gray-700 shadow-sm"
       >
         <input
           type="text"
           placeholder="Search email or action…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-48 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex-1 min-w-48 rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <select
           value={actionFilter}
           onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">All actions</option>
           <option value="cases:">Cases</option>
@@ -111,7 +134,7 @@ export function AuditLogView() {
         <select
           value={resourceFilter}
           onChange={(e) => { setResourceFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="rounded-md border border-gray-600 bg-gray-900 text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">All resources</option>
           <option value="case">case</option>
@@ -131,11 +154,8 @@ export function AuditLogView() {
       </form>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        {isLoading && (
-          <div className="p-8 text-center text-gray-500 text-sm">Loading…</div>
-        )}
-        {error && (
+      <div className="bg-gray-800/50 rounded-lg border border-gray-700 shadow-sm overflow-hidden">
+        {error && !data && (
           <div className="p-8 text-center text-red-500 text-sm">
             Failed to load audit log.
           </div>
@@ -146,44 +166,44 @@ export function AuditLogView() {
           </div>
         )}
         {data && data.items.length > 0 && (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-700 text-sm">
+            <thead className="bg-gray-900/60">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Timestamp
                 </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Actor
                 </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Action
                 </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Resource
                 </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   IP
                 </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                <th className="px-4 py-3 text-left font-medium text-gray-400">
                   Details
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-700/50">
               {data.items.map((event) => (
                 <>
                   <tr
                     key={event.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="hover:bg-gray-700/40 cursor-pointer"
                     onClick={() =>
                       setExpandedId(expandedId === event.id ? null : event.id)
                     }
                   >
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap" suppressHydrationWarning>
                       {new Date(event.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900">
+                      <span className="font-medium text-gray-200">
                         {event.actor_email ?? 'system'}
                       </span>
                     </td>
@@ -196,7 +216,7 @@ export function AuditLogView() {
                         {event.action}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-300">
                       {event.resource ?? '—'}
                       {event.resource_id && (
                         <span className="ml-1 text-gray-400 text-xs">
@@ -212,9 +232,9 @@ export function AuditLogView() {
                     </td>
                   </tr>
                   {expandedId === event.id && (
-                    <tr key={`${event.id}-expanded`} className="bg-gray-50">
+                    <tr key={`${event.id}-expanded`} className="bg-gray-900/40">
                       <td colSpan={6} className="px-4 py-3">
-                        <pre className="text-xs text-gray-700 whitespace-pre-wrap">
+                        <pre className="text-xs text-gray-300 whitespace-pre-wrap">
                           {JSON.stringify(
                             {
                               id: event.id,
@@ -245,14 +265,14 @@ export function AuditLogView() {
             <button
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="px-3 py-1.5 text-sm border rounded-md disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm border border-gray-600 text-gray-300 rounded-md disabled:opacity-40 hover:bg-gray-700"
             >
               Previous
             </button>
             <button
               disabled={page >= data.total_pages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1.5 text-sm border rounded-md disabled:opacity-40 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm border border-gray-600 text-gray-300 rounded-md disabled:opacity-40 hover:bg-gray-700"
             >
               Next
             </button>

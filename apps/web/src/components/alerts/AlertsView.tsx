@@ -35,12 +35,15 @@ const STATUS_CONFIG = {
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
+// Deterministic mock data — no Date.now() or Math.random() to avoid SSR hydration mismatches.
+const MOCK_BASE_TS = '2026-05-06T12:00:00Z';
 const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
   const sev = (['critical', 'high', 'high', 'medium', 'medium', 'medium', 'low', 'info'] as const)[i % 8];
   const src = ['CrowdStrike', 'Splunk', 'AWS Security Hub', 'Okta', 'Microsoft Sentinel'][i % 5];
   const status = (['new', 'investigating', 'new', 'resolved', 'false_positive'] as const)[i % 5];
   const conf = (['high', 'high', 'medium', 'medium', 'medium', 'low'] as const)[i % 6];
   const confScore = conf === 'high' ? 0.78 + (i % 5) * 0.03 : conf === 'medium' ? 0.45 + (i % 5) * 0.03 : 0.18 + (i % 5) * 0.03;
+  const base = new Date(MOCK_BASE_TS).getTime();
   return {
     id: `ALT-${String(1000 + i).padStart(4, '0')}`,
     title: [
@@ -59,14 +62,14 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
     severity: sev,
     status,
     source: src,
-    createdAt: new Date(Date.now() - i * 1800000).toISOString(),
-    updatedAt: new Date(Date.now() - i * 900000).toISOString(),
+    createdAt: new Date(base - i * 1800000).toISOString(),
+    updatedAt: new Date(base - i * 900000).toISOString(),
     tenantId: 'default',
     assignee: i % 3 === 0 ? 'analyst@example.com' : undefined,
     tags: i % 2 === 0 ? ['mitre:T1059', 'endpoint'] : ['network'],
     iocs: [],
     mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],
-    riskScore: Math.floor(Math.random() * 100),
+    riskScore: ((i * 37 + 13) % 100),
     confidenceLabel: conf,
     confidenceScore: Number(confScore.toFixed(2)),
   };
@@ -202,7 +205,7 @@ function AlertRow({ alert }: { alert: Alert }) {
         {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
         <SeverityBadge severity={alert.severity} />
         <StatusBadge status={alert.status} />
-        <span className="text-xs text-gray-600 w-24 text-right">
+        <span className="text-xs text-gray-600 w-24 text-right" suppressHydrationWarning>
           {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
         </span>
       </div>

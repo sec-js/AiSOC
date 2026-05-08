@@ -47,7 +47,7 @@ function isWorkspaceTab(value: string | null): value is WorkspaceTab {
 // ─── Demo case ────────────────────────────────────────────────────────────────
 
 function buildDemoCase(id: string): Case {
-  const now = Date.now();
+  const now = new Date('2026-05-06T12:00:00Z').getTime();
   return {
     id,
     title: 'Suspected lateral movement from finance subnet',
@@ -213,7 +213,7 @@ function TimelineItem({ event }: { event: CaseTimelineEvent }) {
           {event.actor && (
             <span className="text-[11px] text-slate-500">by {event.actor}</span>
           )}
-          <span className="ml-auto text-[11px] text-slate-500">
+          <span className="ml-auto text-[11px] text-slate-500" suppressHydrationWarning>
             {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
           </span>
         </div>
@@ -276,7 +276,7 @@ function TaskRow({ task, onChangeStatus }: TaskRowProps) {
             {task.status.replace('_', ' ')}
           </span>
           {task.assignee && <span>@{task.assignee}</span>}
-          <span>
+          <span suppressHydrationWarning>
             {formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
           </span>
         </div>
@@ -678,12 +678,14 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           <Meta
             label="Created"
             value={format(new Date(caseRecord.createdAt), 'MMM d, HH:mm')}
+            suppressHydrationWarning
           />
           <Meta
             label="Updated"
             value={formatDistanceToNow(new Date(caseRecord.updatedAt), {
               addSuffix: true,
             })}
+            suppressHydrationWarning
           />
           <Meta
             label="SLA"
@@ -692,6 +694,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                 ? `${formatDistanceToNow(new Date(caseRecord.dueAt))} left`
                 : '—'
             }
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -1150,7 +1153,7 @@ function LiveStepsFeed({ steps }: { steps: LiveStep[] }) {
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{step.summary}</p>
               </div>
-              <span className="shrink-0 text-[9px] text-slate-600 font-mono mt-0.5">
+              <span className="shrink-0 text-[9px] text-slate-600 font-mono mt-0.5" suppressHydrationWarning>
                 {new Date(step.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             </li>
@@ -1256,11 +1259,11 @@ function ReportPanel({
 
 // ─── Tiny presentational helpers ──────────────────────────────────────────────
 
-function Meta({ label, value }: { label: string; value: string }) {
+function Meta({ label, value, suppressHydrationWarning: shw }: { label: string; value: string; suppressHydrationWarning?: boolean }) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-0.5 text-sm text-slate-200">{value}</p>
+      <p className="mt-0.5 text-sm text-slate-200" suppressHydrationWarning={shw}>{value}</p>
     </div>
   );
 }

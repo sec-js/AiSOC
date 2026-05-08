@@ -293,7 +293,7 @@ export function InvestigationLedger({
           className="rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
         >
           {runs.map((r) => (
-            <option key={r.id} value={r.id}>
+            <option key={r.id} value={r.id} suppressHydrationWarning>
               {format(new Date(r.started_at), 'MMM d HH:mm')} · {r.status}
               {r.model_used ? ` · ${r.model_used}` : ''}
             </option>
@@ -480,7 +480,7 @@ function RunSummaryCard({
       <Stat
         label="Started · duration"
         value={
-          <span>
+          <span suppressHydrationWarning>
             {format(startedAt, 'HH:mm:ss')}{' '}
             <span className="text-slate-500">·</span> {duration}
           </span>
@@ -625,7 +625,7 @@ function TimelineRow({
                 {event.duration_ms}ms
               </span>
             )}
-            <span className="ml-auto shrink-0 text-[10px] text-slate-600">
+            <span className="ml-auto shrink-0 text-[10px] text-slate-600" suppressHydrationWarning>
               {format(new Date(event.ts), 'HH:mm:ss.SSS')}
             </span>
           </div>
@@ -696,7 +696,7 @@ function ExplainPanel({ runId, step }: { runId: string; step: number }) {
             {focus.agent && (
               <span className="text-xs font-semibold text-slate-200">{focus.agent}</span>
             )}
-            <span className="ml-auto text-[10px] text-slate-500">
+            <span className="ml-auto text-[10px] text-slate-500" suppressHydrationWarning>
               {format(new Date(focus.ts), 'MMM d, HH:mm:ss.SSS')}
               {focus.duration_ms > 0 && ` · ${focus.duration_ms}ms`}
             </span>
@@ -813,7 +813,7 @@ function NeighbourCard({
             <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-400">
               {event.summary || '—'}
             </p>
-            <p className="mt-0.5 font-mono text-[10px] text-slate-600">
+            <p className="mt-0.5 font-mono text-[10px] text-slate-600" suppressHydrationWarning>
               #{event.seq} · {formatDistanceToNow(new Date(event.ts), { addSuffix: true })}
             </p>
           </div>

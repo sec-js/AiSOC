@@ -75,10 +75,9 @@ function formatLastSync(ts?: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function abbreviateType(type: string): string {
+function abbreviateType(type: string | undefined): string {
+  if (!type) return '???';
   if (CONNECTOR_LABELS[type]) return CONNECTOR_LABELS[type];
-  // Fall back to the first 3 letters of the connector type so unknown
-  // connectors still get a readable badge instead of "GEN".
   return type.slice(0, 3).toUpperCase();
 }
 

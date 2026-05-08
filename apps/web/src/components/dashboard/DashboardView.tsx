@@ -1,15 +1,100 @@
 'use client';
 
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { metricsApi, type DashboardMetrics } from '@/lib/api';
 import { clsx } from 'clsx';
-import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
+import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
 import { LiveFeedPanel } from './LiveFeedPanel';
 import { SOCMetricsDashboard } from './SOCMetricsDashboard';
+
+const RechartsArea = dynamic(
+  () => import('recharts').then((m) => {
+    const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = m;
+    function RechartsAreaInner(props: { data: { time: string; count: number }[] }) {
+      return (
+        <ResponsiveContainer width="100%" height={180}>
+          <AreaChart data={props.data}>
+            <defs>
+              <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+            <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} interval={3} />
+            <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="url(#alertGrad)" strokeWidth={2} name="Alerts" />
+          </AreaChart>
+        </ResponsiveContainer>
+      );
+    }
+    return RechartsAreaInner;
+  }),
+  { ssr: false, loading: () => <div className="h-[180px] bg-gray-800/30 animate-pulse rounded" /> },
+);
+
+const RechartsPie = dynamic(
+  () => import('recharts').then((m) => {
+    const { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } = m;
+    function RechartsPieInner(props: { data: { name: string; value: number; color: string }[] }) {
+      return (
+        <ResponsiveContainer width="100%" height={140}>
+          <PieChart>
+            <Pie data={props.data} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={0}>
+              {props.data.map((entry, i) => (
+                <Cell key={i} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value, name) => [value, name]} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }} />
+          </PieChart>
+        </ResponsiveContainer>
+      );
+    }
+    return RechartsPieInner;
+  }),
+  { ssr: false, loading: () => <div className="h-[140px] bg-gray-800/30 animate-pulse rounded" /> },
+);
+
+const RechartsBar = dynamic(
+  () => import('recharts').then((m) => {
+    const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = m;
+    function RechartsBarInner(props: { data: { tactic: string; count: number }[] }) {
+      return (
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={props.data} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+            <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey="tactic" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} width={100} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Alerts" />
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+    return RechartsBarInner;
+  }),
+  { ssr: false, loading: () => <div className="h-[180px] bg-gray-800/30 animate-pulse rounded" /> },
+);
+
+class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('[DashboardView] render error:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 text-center text-gray-400">
+          <p className="text-sm">Dashboard encountered an error. Please refresh.</p>
+          <button onClick={() => this.setState({ hasError: false })} className="mt-2 text-xs text-blue-400 underline">Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -45,9 +130,10 @@ const MOCK_METRICS: DashboardMetrics = {
     { tactic: 'Lateral Movement', count: 38 },
     { tactic: 'Exfiltration', count: 21 },
   ],
+  // Deterministic timestamps — no Date.now()/Math.random() to avoid SSR hydration mismatches.
   alertsTrend: Array.from({ length: 24 }, (_, i) => ({
-    timestamp: new Date(Date.now() - (23 - i) * 3600000).toISOString(),
-    count: Math.floor(Math.random() * 80) + 20,
+    timestamp: new Date(new Date('2026-05-06T12:00:00Z').getTime() - (23 - i) * 3600000).toISOString(),
+    count: ((i * 37 + 13) % 80) + 20,
     severity: 'all',
   })),
   threatsBySource: [
@@ -120,11 +206,20 @@ function CustomTooltip({ active, payload, label }: any) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { data: metrics = MOCK_METRICS } = useSWR(
+  const { data: rawMetrics } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
-    { fallbackData: MOCK_METRICS, refreshInterval: 60000 }
+    {
+      fallbackData: MOCK_METRICS,
+      refreshInterval: 60000,
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+      revalidateOnFocus: false,
+    }
   );
+
+  const isValidMetrics = rawMetrics && typeof rawMetrics.alerts?.total === "number" && Array.isArray(rawMetrics.alertsTrend);
+  const metrics = isValidMetrics ? rawMetrics : MOCK_METRICS;
 
   const trendData = metrics.alertsTrend.map((d) => ({
     time: format(new Date(d.timestamp), 'HH:mm'),
@@ -139,166 +234,132 @@ export function DashboardView() {
   ];
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Entity-risk alerting, confidence-scored triage, and 16 connected sources
-          </p>
-        </div>
-      </div>
-
-      {/* Top Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <MetricCard
-          label="Active Alerts"
-          value={metrics.alerts.total}
-          sub={`${metrics.alerts.new} new today`}
-          color="blue"
-          trend={{ value: 12, label: 'vs yesterday' }}
-        />
-        <MetricCard
-          label="Critical"
-          value={metrics.alerts.critical}
-          sub="Require immediate action"
-          color="red"
-          trend={{ value: -3, label: 'vs yesterday' }}
-        />
-        <MetricCard
-          label="Open Cases"
-          value={metrics.cases.open}
-          sub={`${metrics.cases.inProgress} in progress`}
-          color="orange"
-        />
-        <MetricCard
-          label="MTTR"
-          value={`${metrics.alerts.mttr}m`}
-          sub="Mean time to resolve"
-          color="green"
-          trend={{ value: -8, label: 'vs last week' }}
-        />
-        <MetricCard
-          label="Connected Sources"
-          value={metrics.sources.filter(s => s.status === 'active').length}
-          sub="EDR, SIEM, Cloud, IAM, SaaS"
-          color="purple"
-        />
-      </div>
-
-      {/* Charts row */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Alert trend */}
-        <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
-            <span className="text-xs text-gray-500">Last 24 hours</span>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={trendData}>
-              <defs>
-                <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} interval={3} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="url(#alertGrad)" strokeWidth={2} name="Alerts" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Severity breakdown */}
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
-          <ResponsiveContainer width="100%" height={140}>
-            <PieChart>
-              <Pie data={SEVERITY_CHART_DATA} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={0}>
-                {SEVERITY_CHART_DATA.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value, name) => [value, name]} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-1.5 mt-2">
-            {SEVERITY_CHART_DATA.map((d) => (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                  <span className="text-gray-400">{d.name}</span>
-                </div>
-                <span className="text-gray-300 font-medium">{d.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom row */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* MITRE ATT&CK */}
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={metrics.topMitre} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
-              <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="tactic" tick={{ fill: '#9ca3af', fontSize: 10 }} tickLine={false} axisLine={false} width={100} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Alerts" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Sources */}
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
-          <div className="space-y-3">
-            {metrics.sources.map((src) => {
-              const maxCount = Math.max(...metrics.sources.map(s => s.count));
-              const pct = Math.round((src.count / maxCount) * 100);
-              return (
-                <div key={src.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className={clsx(
-                        'w-1.5 h-1.5 rounded-full',
-                        src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
-                      )} />
-                      <span className="text-xs text-gray-300">{src.name}</span>
-                    </div>
-                    <span className="text-xs text-gray-500">{src.count}</span>
-                  </div>
-                  <div className="h-1 bg-gray-800 rounded-full">
-                    <div className="h-1 bg-blue-500/60 rounded-full" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Live Feed (realtime via WebSocket) */}
-        <LiveFeedPanel />
-      </div>
-
-      {/* SOC Metrics — Tier 1.4: MTTD/MTTR/MTTC/FPR/escalation rate, calibration curve, ATT&CK heatmap */}
-      <div className="pt-2">
-        <div className="flex items-center justify-between mb-3">
+    <DashboardErrorBoundary>
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
+            <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Entity-risk alerting, confidence-scored triage, and 16 connected sources
             </p>
           </div>
         </div>
-        <SOCMetricsDashboard />
+
+        {/* Top Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <MetricCard
+            label="Active Alerts"
+            value={metrics.alerts.total}
+            sub={`${metrics.alerts.new} new today`}
+            color="blue"
+            trend={{ value: 12, label: 'vs yesterday' }}
+          />
+          <MetricCard
+            label="Critical"
+            value={metrics.alerts.critical}
+            sub="Require immediate action"
+            color="red"
+            trend={{ value: -3, label: 'vs yesterday' }}
+          />
+          <MetricCard
+            label="Open Cases"
+            value={metrics.cases.open}
+            sub={`${metrics.cases.inProgress} in progress`}
+            color="orange"
+          />
+          <MetricCard
+            label="MTTR"
+            value={`${metrics.alerts.mttr}m`}
+            sub="Mean time to resolve"
+            color="green"
+            trend={{ value: -8, label: 'vs last week' }}
+          />
+          <MetricCard
+            label="Connected Sources"
+            value={metrics.sources.filter(s => s.status === 'active').length}
+            sub="EDR, SIEM, Cloud, IAM, SaaS"
+            color="purple"
+          />
+        </div>
+
+        {/* Charts row */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
+              <span className="text-xs text-gray-500">Last 24 hours</span>
+            </div>
+            <RechartsArea data={trendData} />
+          </div>
+
+          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
+            <RechartsPie data={SEVERITY_CHART_DATA} />
+            <div className="space-y-1.5 mt-2">
+              {SEVERITY_CHART_DATA.map((d) => (
+                <div key={d.name} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                    <span className="text-gray-400">{d.name}</span>
+                  </div>
+                  <span className="text-gray-300 font-medium">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom row */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
+            <RechartsBar data={metrics.topMitre} />
+          </div>
+
+          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
+            <div className="space-y-3">
+              {metrics.sources.map((src) => {
+                const maxCount = Math.max(...metrics.sources.map(s => s.count));
+                const pct = Math.round((src.count / maxCount) * 100);
+                return (
+                  <div key={src.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className={clsx(
+                          'w-1.5 h-1.5 rounded-full',
+                          src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
+                        )} />
+                        <span className="text-xs text-gray-300">{src.name}</span>
+                      </div>
+                      <span className="text-xs text-gray-500">{src.count}</span>
+                    </div>
+                    <div className="h-1 bg-gray-800 rounded-full">
+                      <div className="h-1 bg-blue-500/60 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <LiveFeedPanel />
+        </div>
+
+        {/* SOC Performance */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
+              </p>
+            </div>
+          </div>
+          <SOCMetricsDashboard />
+        </div>
       </div>
-    </div>
+    </DashboardErrorBoundary>
   );
 }

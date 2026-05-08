@@ -113,6 +113,7 @@ export function SOC2View() {
     setExporting(true);
     try {
       const res = await fetch('/api/v1/compliance/soc2/export', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       // Generate a printable HTML page for PDF export
       const html = buildPDFHtml(json);
@@ -287,7 +288,7 @@ export function SOC2View() {
                             {ev.description && (
                               <p className="text-xs text-gray-500 mt-0.5">{ev.description}</p>
                             )}
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-400 mt-1" suppressHydrationWarning>
                               {new Date(ev.collected_at).toLocaleString()} · {ev.evidence_type}
                             </p>
                           </div>

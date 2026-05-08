@@ -95,10 +95,11 @@ LIMIT 200`,
 
 // ─── Demo fallback ────────────────────────────────────────────────────────────
 
+// Deterministic timestamps — no Date.now() to avoid SSR hydration mismatches.
 const DEMO_RESULTS: HuntResult[] = [
   {
     id: 'r-001',
-    timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    timestamp: '2026-05-06T11:48:00Z',
     source: 'crowdstrike',
     severity: 'high',
     fields: {
@@ -113,7 +114,7 @@ const DEMO_RESULTS: HuntResult[] = [
   },
   {
     id: 'r-002',
-    timestamp: new Date(Date.now() - 41 * 60 * 1000).toISOString(),
+    timestamp: '2026-05-06T11:19:00Z',
     source: 'defender',
     severity: 'critical',
     fields: {
@@ -128,7 +129,7 @@ const DEMO_RESULTS: HuntResult[] = [
   },
   {
     id: 'r-003',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    timestamp: '2026-05-06T10:00:00Z',
     source: 'splunk',
     severity: 'medium',
     fields: {
@@ -147,7 +148,7 @@ const DEMO_SAVED: SavedSearch[] = [
     name: 'Encoded PowerShell',
     query: STARTERS.kql,
     language: 'kql',
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2026-05-04T12:00:00Z',
     pinned: true,
   },
   {
@@ -157,7 +158,7 @@ const DEMO_SAVED: SavedSearch[] = [
 `process where process.name in ("procdump.exe", "procdump64.exe")
   and process.command_line like~ "*lsass*"`,
     language: 'kql',
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2026-05-01T12:00:00Z',
   },
   {
     id: 'demo-3',
@@ -166,7 +167,7 @@ const DEMO_SAVED: SavedSearch[] = [
 `network where network.direction == "outbound"
   and network.destination.ip in <tor_exit_nodes>`,
     language: 'kql',
-    createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: '2026-04-27T12:00:00Z',
   },
 ];
 
@@ -252,7 +253,7 @@ function SavedList({
               )}
             </div>
             <p className="mt-1 truncate text-sm text-slate-200">{s.name}</p>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-slate-500" suppressHydrationWarning>
               {formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}
             </p>
           </button>
@@ -301,7 +302,7 @@ function ResultRow({ result }: { result: HuntResult }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-            <span className="font-mono text-slate-300">
+            <span className="font-mono text-slate-300" suppressHydrationWarning>
               {format(new Date(result.timestamp), 'MMM dd HH:mm:ss')}
             </span>
             <span className="text-slate-600">·</span>

@@ -66,13 +66,16 @@ const SEVERITY_COLORS: Record<Severity, string> = {
   info: 'bg-gray-500/20 text-gray-300 border border-gray-500/30',
 };
 
+// Deterministic base — no Date.now() to avoid SSR hydration mismatches.
+// The live-updating clock inside the component handles "X seconds ago" rendering.
+const DEMO_BASE = new Date('2026-05-06T12:00:00Z').getTime();
 const DEMO_EVENTS: LiveEvent[] = [
   {
     id: 'demo-1',
     severity: 'critical',
     text: 'Ransomware indicators detected on DESKTOP-7892',
     source: 'CrowdStrike',
-    receivedAt: Date.now() - 2_000,
+    receivedAt: DEMO_BASE - 2_000,
     isDemo: true,
   },
   {
@@ -80,7 +83,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'high',
     text: 'Impossible travel: admin login from US then RU within 4 min',
     source: 'Okta',
-    receivedAt: Date.now() - 14_000,
+    receivedAt: DEMO_BASE - 14_000,
     isDemo: true,
   },
   {
@@ -88,7 +91,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'high',
     text: 'IAM role assumed from untrusted account 319…847',
     source: 'AWS CloudTrail',
-    receivedAt: Date.now() - 28_000,
+    receivedAt: DEMO_BASE - 28_000,
     isDemo: true,
   },
   {
@@ -96,7 +99,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'medium',
     text: 'OAuth app granted Mail.ReadWrite across 37 mailboxes',
     source: 'Microsoft 365',
-    receivedAt: Date.now() - 42_000,
+    receivedAt: DEMO_BASE - 42_000,
     isDemo: true,
   },
   {
@@ -104,7 +107,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'medium',
     text: 'Anomalous GCS bucket policy change in prod project',
     source: 'GCP SCC',
-    receivedAt: Date.now() - 58_000,
+    receivedAt: DEMO_BASE - 58_000,
     isDemo: true,
   },
   {
@@ -112,7 +115,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'low',
     text: 'New deploy key added to private repo infra-terraform',
     source: 'GitHub Audit',
-    receivedAt: Date.now() - 76_000,
+    receivedAt: DEMO_BASE - 76_000,
     isDemo: true,
   },
   {
@@ -120,7 +123,7 @@ const DEMO_EVENTS: LiveEvent[] = [
     severity: 'low',
     text: 'SPL federated search matched 12 indicators across Splunk',
     source: 'Sentinel',
-    receivedAt: Date.now() - 95_000,
+    receivedAt: DEMO_BASE - 95_000,
     isDemo: true,
   },
 ];

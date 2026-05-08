@@ -326,7 +326,7 @@ export function FrameworkView({ framework }: Props) {
                                   {ev.description}
                                 </p>
                               )}
-                              <div className="text-gray-600 text-xs mt-1">
+                              <div className="text-gray-600 text-xs mt-1" suppressHydrationWarning>
                                 {ev.evidence_type} ·{' '}
                                 {new Date(ev.collected_at).toLocaleString()}
                               </div>

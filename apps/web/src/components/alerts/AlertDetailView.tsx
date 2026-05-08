@@ -82,8 +82,8 @@ const MOCK_ALERT: Alert = {
   ],
   tags: ['powershell', 'c2-beacon', 'high-priority'],
   assignee: 'analyst@example.com',
-  createdAt: new Date(Date.now() - 3600000).toISOString(),
-  updatedAt: new Date(Date.now() - 1800000).toISOString(),
+  createdAt: '2026-05-06T11:00:00Z',
+  updatedAt: '2026-05-06T11:30:00Z',
   confidenceLabel: 'high',
   confidenceScore: 0.86,
   confidenceRationale: [
@@ -326,7 +326,7 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
                     {event.summary}
                   </span>
                 </div>
-                <div className="text-[10px] text-gray-600 mt-0.5">
+                <div className="text-[10px] text-gray-600 mt-0.5" suppressHydrationWarning>
                   {event.agent} · {format(new Date(event.ts), 'HH:mm:ss')}
                 </div>
               </div>
@@ -765,7 +765,7 @@ function AnalystOverridePanel({
                         {c.severity}
                       </span>
                       <span className="text-[10px] text-gray-600">·</span>
-                      <span className="text-[10px] text-gray-500">
+                      <span className="text-[10px] text-gray-500" suppressHydrationWarning>
                         {format(new Date(c.event_time), 'MMM d, HH:mm')}
                       </span>
                       {c.current_disposition && (
@@ -880,7 +880,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
           </div>
           <h1 className="text-lg font-semibold text-gray-100">{alert.title}</h1>
-          <p className="text-sm text-gray-500 mt-1">{alert.source} · {format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</p>
+          <p className="text-sm text-gray-500 mt-1" suppressHydrationWarning>{alert.source} · {format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <select
@@ -965,9 +965,9 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                 <Field label="Source Ref" value={alert.sourceRef || '—'} />
                 <Field label="Tenant" value={alert.tenantId} />
                 <Field label="Assignee" value={alert.assignee || <span className="text-gray-500">Unassigned</span>} />
-                <Field label="Created" value={format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')} />
+                <Field label="Created" value={<span suppressHydrationWarning>{format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</span>} />
                 {alert.resolvedAt && (
-                  <Field label="Resolved" value={format(new Date(alert.resolvedAt), 'MMM d, yyyy HH:mm:ss')} />
+                  <Field label="Resolved" value={<span suppressHydrationWarning>{format(new Date(alert.resolvedAt), 'MMM d, yyyy HH:mm:ss')}</span>} />
                 )}
                 {alert.tags && alert.tags.length > 0 && (
                   <Field label="Tags" value={
@@ -1038,7 +1038,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                 <div className="pb-4">
                   <div className="text-sm font-medium text-gray-200">{event.title}</div>
                   <div className="text-xs text-gray-500 mt-0.5">{event.desc}</div>
-                  <div className="text-xs text-gray-600 mt-1">{format(new Date(event.time), 'MMM d, yyyy HH:mm:ss')}</div>
+                  <div className="text-xs text-gray-600 mt-1" suppressHydrationWarning>{format(new Date(event.time), 'MMM d, yyyy HH:mm:ss')}</div>
                 </div>
               </div>
             ))}

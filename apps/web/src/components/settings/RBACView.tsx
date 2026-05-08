@@ -19,22 +19,26 @@ interface Role {
   permissions: Permission[];
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 
 const CATEGORY_COLORS: Record<string, string> = {
-  cases: 'bg-blue-100 text-blue-800',
-  alerts: 'bg-red-100 text-red-800',
-  playbooks: 'bg-purple-100 text-purple-800',
-  detections: 'bg-orange-100 text-orange-800',
-  connectors: 'bg-teal-100 text-teal-800',
-  api_keys: 'bg-yellow-100 text-yellow-800',
-  audit: 'bg-gray-100 text-gray-800',
-  compliance: 'bg-green-100 text-green-800',
-  admin: 'bg-pink-100 text-pink-800',
+  cases: 'bg-blue-500/20 text-blue-300',
+  alerts: 'bg-red-500/20 text-red-300',
+  playbooks: 'bg-purple-500/20 text-purple-300',
+  detections: 'bg-orange-500/20 text-orange-300',
+  connectors: 'bg-teal-500/20 text-teal-300',
+  api_keys: 'bg-yellow-500/20 text-yellow-300',
+  audit: 'bg-gray-500/20 text-gray-300',
+  compliance: 'bg-green-500/20 text-green-300',
+  admin: 'bg-pink-500/20 text-pink-300',
 };
 
 function PermissionBadge({ perm }: { perm: Permission }) {
-  const cls = CATEGORY_COLORS[perm.category ?? ''] ?? 'bg-gray-100 text-gray-700';
+  const cls = CATEGORY_COLORS[perm.category ?? ''] ?? 'bg-gray-500/20 text-gray-300';
   return (
     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cls}`} title={perm.description ?? ''}>
       {perm.name}
@@ -44,30 +48,30 @@ function PermissionBadge({ perm }: { perm: Permission }) {
 
 function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: (r: Role) => void; onDelete: (r: Role) => void }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-gray-800/60 bg-gray-900/60 p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-gray-900">{role.name}</span>
+            <span className="text-base font-semibold text-gray-100">{role.name}</span>
             {role.is_system && (
               <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
                 system
               </span>
             )}
           </div>
-          {role.description && <p className="mt-0.5 text-sm text-gray-500">{role.description}</p>}
+          {role.description && <p className="mt-0.5 text-sm text-gray-400">{role.description}</p>}
         </div>
         {!role.is_system && (
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => onEdit(role)}
-              className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+              className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800"
             >
               Edit
             </button>
             <button
               onClick={() => onDelete(role)}
-              className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+              className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-900/30"
             >
               Delete
             </button>
@@ -76,7 +80,7 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: (r: Role) =>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {role.permissions.length === 0 ? (
-          <span className="text-xs text-gray-400 italic">No permissions assigned</span>
+          <span className="text-xs text-gray-600 italic">No permissions assigned</span>
         ) : (
           role.permissions.map((p) => <PermissionBadge key={p.id} perm={p} />)
         )}
@@ -208,9 +212,51 @@ function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
   );
 }
 
+const MOCK_PERMISSIONS: Permission[] = [
+  { id: 'p1', name: 'alerts.read', description: 'View alerts', category: 'alerts' },
+  { id: 'p2', name: 'alerts.write', description: 'Update alert status', category: 'alerts' },
+  { id: 'p3', name: 'cases.read', description: 'View cases', category: 'cases' },
+  { id: 'p4', name: 'cases.write', description: 'Create and edit cases', category: 'cases' },
+  { id: 'p5', name: 'playbooks.read', description: 'View playbooks', category: 'playbooks' },
+  { id: 'p6', name: 'playbooks.execute', description: 'Run playbooks', category: 'playbooks' },
+  { id: 'p7', name: 'detections.read', description: 'View detection rules', category: 'detections' },
+  { id: 'p8', name: 'detections.write', description: 'Manage detection rules', category: 'detections' },
+  { id: 'p9', name: 'connectors.read', description: 'View connectors', category: 'connectors' },
+  { id: 'p10', name: 'connectors.write', description: 'Manage connectors', category: 'connectors' },
+  { id: 'p11', name: 'admin.settings', description: 'Manage settings', category: 'admin' },
+  { id: 'p12', name: 'audit.read', description: 'View audit logs', category: 'audit' },
+];
+
+const MOCK_ROLES: Role[] = [
+  {
+    id: 'role-1', tenant_id: 'default', name: 'SOC Analyst', description: 'Front-line analyst with read access to alerts, cases, and playbooks',
+    is_system: true,
+    permissions: MOCK_PERMISSIONS.filter((p) => ['p1', 'p3', 'p5', 'p7', 'p9', 'p12'].includes(p.id)),
+  },
+  {
+    id: 'role-2', tenant_id: 'default', name: 'SOC Lead', description: 'Senior analyst with write access and playbook execution',
+    is_system: true,
+    permissions: MOCK_PERMISSIONS.filter((p) => ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p9', 'p12'].includes(p.id)),
+  },
+  {
+    id: 'role-3', tenant_id: 'default', name: 'Admin', description: 'Full access to all features and settings',
+    is_system: true,
+    permissions: MOCK_PERMISSIONS,
+  },
+  {
+    id: 'role-4', tenant_id: 'default', name: 'Detection Engineer', description: 'Manages detection rules and connector integrations',
+    is_system: false,
+    permissions: MOCK_PERMISSIONS.filter((p) => ['p1', 'p7', 'p8', 'p9', 'p10'].includes(p.id)),
+  },
+];
+
 export function RBACView() {
-  const { data: roles, error: rolesError } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher);
-  const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher);
+  const { data: roles, error: rolesError } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher, {
+    fallbackData: MOCK_ROLES,
+  });
+  const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher, {
+    fallbackData: MOCK_PERMISSIONS,
+  });
 
   const [showCreate, setShowCreate] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -225,7 +271,7 @@ export function RBACView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Roles & Permissions</h2>
+          <h2 className="text-xl font-bold text-gray-100">Roles & Permissions</h2>
           <p className="mt-0.5 text-sm text-gray-500">Manage access control for your organization.</p>
         </div>
         <button
@@ -237,13 +283,15 @@ export function RBACView() {
       </div>
 
       {rolesError && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Failed to load roles.</div>
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+          RBAC API unreachable — showing demo roles so you can explore access control.
+        </div>
       )}
 
       {!roles && !rolesError && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-100" />
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-800/60" />
           ))}
         </div>
       )}

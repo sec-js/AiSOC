@@ -121,7 +121,16 @@ const TYPE_COLORS: Record<string, string> = {
   plugin:    'bg-emerald-900/40 text-emerald-300 border-emerald-700/60',
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Invalid JSON');
+  }
+};
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -417,7 +426,12 @@ async function fetchInstalled(url: string): Promise<InstalledResponse | null> {
 export function MarketplaceView() {
   const { data, error, isLoading } = useSWR<MarketplaceIndex>(
     '/marketplace/index.json',
-    fetcher
+    fetcher,
+    {
+      shouldRetryOnError: false,
+      errorRetryCount: 1,
+      revalidateOnFocus: false,
+    }
   );
 
   const {

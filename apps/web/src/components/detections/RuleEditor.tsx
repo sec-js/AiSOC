@@ -79,7 +79,7 @@ SecurityEvent
 
 const SAMPLE_EVENT = JSON.stringify(
   {
-    '@timestamp': new Date().toISOString(),
+    '@timestamp': '2026-05-06T12:00:00Z',
     host: { name: 'WIN-DC-01', os: { family: 'windows' } },
     process: {
       name: 'powershell.exe',
@@ -590,13 +590,13 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
             <div className="rounded-md border border-gray-800 bg-gray-900/40 p-3 text-xs text-gray-500">
               <div>
                 Created{' '}
-                <span className="text-gray-400">
+                <span className="text-gray-400" suppressHydrationWarning>
                   {new Date(data.createdAt).toLocaleString()}
                 </span>
               </div>
               <div className="mt-0.5">
                 Updated{' '}
-                <span className="text-gray-400">
+                <span className="text-gray-400" suppressHydrationWarning>
                   {new Date(data.updatedAt).toLocaleString()}
                 </span>
               </div>

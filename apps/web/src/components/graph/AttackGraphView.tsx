@@ -45,7 +45,7 @@ if (typeof window !== 'undefined') {
 // ─── Demo fallback graph ──────────────────────────────────────────────────────
 
 const DEMO_GRAPH: AttackGraph = {
-  generatedAt: new Date().toISOString(),
+  generatedAt: '2026-05-06T12:00:00Z',
   nodes: [
     { id: 'host:WIN-FIN-DB01', label: 'WIN-FIN-DB01', kind: 'host', riskScore: 92 },
     { id: 'host:WIN-PROD-WEB02', label: 'WIN-PROD-WEB02', kind: 'host', riskScore: 71 },
@@ -246,13 +246,13 @@ const FALLBACK_TACTICS = [
 function buildDemoCoverage(): MitreCoverage {
   const cells = FALLBACK_TACTICS.flatMap((tactic, ti) =>
     Array.from({ length: 6 }, (_, ri) => {
-      const detections = Math.floor(Math.random() * 9);
+      const detections = ((ti * 7 + ri * 3 + 5) % 9);
       return {
         techniqueId: `T${1000 + ti * 10 + ri}`,
         techniqueName: `Technique ${ti + 1}.${ri + 1}`,
         tactic,
         detections,
-        alerts: detections * (1 + Math.floor(Math.random() * 4)),
+        alerts: detections * (1 + ((ti + ri) % 4)),
         intensity: Math.min(1, detections / 8),
       };
     }),
@@ -260,7 +260,7 @@ function buildDemoCoverage(): MitreCoverage {
   return {
     tactics: FALLBACK_TACTICS,
     cells,
-    generatedAt: new Date().toISOString(),
+    generatedAt: '2026-05-06T12:00:00Z',
   };
 }
 
@@ -372,7 +372,7 @@ export function AttackGraphView() {
               telemetry.
             </p>
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500" suppressHydrationWarning>
             {graph
               ? `Generated ${new Date(graph.generatedAt).toLocaleTimeString()}`
               : ''}
@@ -500,7 +500,7 @@ export function AttackGraphView() {
               detections firing on that technique.
             </p>
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500" suppressHydrationWarning>
             {mitre
               ? `Updated ${new Date(mitre.generatedAt).toLocaleTimeString()}`
               : ''}

@@ -17,6 +17,7 @@ import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import {
   entityRiskApi,
+  type AlertSeverity,
   type EntityRiskRecord,
   type EntityRiskStats,
   type EntityType,
@@ -40,6 +41,65 @@ const SEVERITY_DOT: Record<string, string> = {
   medium: 'bg-yellow-500',
   low: 'bg-blue-500',
   info: 'bg-gray-500',
+};
+
+const MOCK_ENTITIES: EntityRiskRecord[] = [
+  {
+    tenant_id: 'demo', entity_type: 'user' as EntityType, entity_value: 'jsmith@acme.corp',
+    score: 92.4, display_score: 92, threshold: 80, promoted: true, promoted_incident_id: null, alert_count: 8,
+    severity_histogram: { critical: 2, high: 3, medium: 2, low: 1, info: 0 },
+    first_seen: '2026-05-06T06:15:00Z', last_seen: '2026-05-06T12:42:00Z',
+    contributions: [
+      { alert_id: 'ALT-4021', title: 'Impossible Travel Detected', severity: 'critical' as AlertSeverity, source: 'Okta', raw_points: 28, observed_at: '2026-05-06T12:42:00Z' },
+      { alert_id: 'ALT-4018', title: 'Suspicious MFA Reset', severity: 'high' as AlertSeverity, source: 'Azure AD', raw_points: 18, observed_at: '2026-05-06T11:30:00Z' },
+      { alert_id: 'ALT-4015', title: 'Bulk File Download from SharePoint', severity: 'high' as AlertSeverity, source: 'Microsoft 365', raw_points: 15, observed_at: '2026-05-06T10:15:00Z' },
+    ],
+  },
+  {
+    tenant_id: 'demo', entity_type: 'host' as EntityType, entity_value: 'WS-PROD-042',
+    score: 78.1, display_score: 78, threshold: 80, promoted: false, promoted_incident_id: null, alert_count: 5,
+    severity_histogram: { critical: 1, high: 2, medium: 2, low: 0, info: 0 },
+    first_seen: '2026-05-06T08:30:00Z', last_seen: '2026-05-06T12:15:00Z',
+    contributions: [
+      { alert_id: 'ALT-4019', title: 'PowerShell Encoded Command', severity: 'critical' as AlertSeverity, source: 'CrowdStrike', raw_points: 25, observed_at: '2026-05-06T12:15:00Z' },
+      { alert_id: 'ALT-4016', title: 'LSASS Memory Access', severity: 'high' as AlertSeverity, source: 'CrowdStrike', raw_points: 20, observed_at: '2026-05-06T11:00:00Z' },
+    ],
+  },
+  {
+    tenant_id: 'demo', entity_type: 'ip' as EntityType, entity_value: '198.51.100.42',
+    score: 65.3, display_score: 65, threshold: 80, promoted: false, promoted_incident_id: null, alert_count: 4,
+    severity_histogram: { critical: 0, high: 1, medium: 3, low: 0, info: 0 },
+    first_seen: '2026-05-06T09:00:00Z', last_seen: '2026-05-06T11:45:00Z',
+    contributions: [
+      { alert_id: 'ALT-4020', title: 'C2 Beacon Pattern Detected', severity: 'high' as AlertSeverity, source: 'Splunk', raw_points: 22, observed_at: '2026-05-06T11:45:00Z' },
+    ],
+  },
+  {
+    tenant_id: 'demo', entity_type: 'domain' as EntityType, entity_value: 'updates.evil-cdn.xyz',
+    score: 88.7, display_score: 89, threshold: 80, promoted: true, promoted_incident_id: null, alert_count: 6,
+    severity_histogram: { critical: 1, high: 3, medium: 2, low: 0, info: 0 },
+    first_seen: '2026-05-06T07:00:00Z', last_seen: '2026-05-06T12:30:00Z',
+    contributions: [
+      { alert_id: 'ALT-4022', title: 'Known Malicious Domain Resolution', severity: 'critical' as AlertSeverity, source: 'Threat Intel', raw_points: 30, observed_at: '2026-05-06T12:30:00Z' },
+      { alert_id: 'ALT-4017', title: 'DNS Tunneling Suspected', severity: 'high' as AlertSeverity, source: 'Splunk', raw_points: 18, observed_at: '2026-05-06T10:45:00Z' },
+    ],
+  },
+  {
+    tenant_id: 'demo', entity_type: 'user' as EntityType, entity_value: 'admin@partner.co',
+    score: 45.2, display_score: 45, threshold: 80, promoted: false, promoted_incident_id: null, alert_count: 3,
+    severity_histogram: { critical: 0, high: 0, medium: 2, low: 1, info: 0 },
+    first_seen: '2026-05-06T10:00:00Z', last_seen: '2026-05-06T12:00:00Z',
+    contributions: [
+      { alert_id: 'ALT-4023', title: 'Failed Login Brute Force', severity: 'medium' as AlertSeverity, source: 'Okta', raw_points: 12, observed_at: '2026-05-06T12:00:00Z' },
+    ],
+  },
+];
+
+const MOCK_ENTITY_STATS: EntityRiskStats = {
+  total: 5,
+  promoted: 2,
+  alert_count: 26,
+  threshold: 80,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -227,7 +287,7 @@ function EntityRow({
           <span className="text-gray-700">·</span>
           <SeverityHistogram histogram={record.severity_histogram} />
           <span className="text-gray-700">·</span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500" suppressHydrationWarning>
             last seen{' '}
             {formatDistanceToNow(new Date(record.last_seen), {
               addSuffix: true,
@@ -325,7 +385,7 @@ function EntityDetailDrawer({
               <p className="text-2xl font-bold text-gray-200">
                 {record.alert_count}
               </p>
-              <p className="text-[10px] text-gray-500 mt-0.5">
+              <p className="text-[10px] text-gray-500 mt-0.5" suppressHydrationWarning>
                 first seen{' '}
                 {formatDistanceToNow(new Date(record.first_seen), {
                   addSuffix: true,
@@ -378,7 +438,7 @@ function EntityDetailDrawer({
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500">
                         {c.source && <span>{c.source}</span>}
                         {c.source && <span className="text-gray-700">·</span>}
-                        <span>
+                        <span suppressHydrationWarning>
                           {formatDistanceToNow(new Date(c.observed_at), {
                             addSuffix: true,
                           })}
@@ -405,12 +465,12 @@ export function EntityRiskQueue() {
   const { data: queue, error: queueError, isLoading: queueLoading } = useSWR(
     ['entity-risk-queue', promotedOnly],
     () => entityRiskApi.queue({ limit: 50, promotedOnly }),
-    { refreshInterval: 30000 },
+    { refreshInterval: 30000, fallbackData: { entities: MOCK_ENTITIES, threshold: 80 } },
   );
   const { data: stats } = useSWR<EntityRiskStats>(
     'entity-risk-stats',
     () => entityRiskApi.stats(),
-    { refreshInterval: 30000 },
+    { refreshInterval: 30000, fallbackData: MOCK_ENTITY_STATS },
   );
 
   const entities = queue?.entities ?? [];
@@ -485,6 +545,12 @@ export function EntityRiskQueue() {
         </span>
       </div>
 
+      {queueError && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+          Fusion service unreachable — showing demo entity queue so you can explore Risk-Based Alerting.
+        </div>
+      )}
+
       {/* Queue */}
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
         <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80 gap-4">
@@ -493,24 +559,9 @@ export function EntityRiskQueue() {
           <span className="text-xs text-gray-500 w-20 text-center">BAND</span>
         </div>
 
-        {queueLoading ? (
+        {queueLoading && entities.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : fusionUnavailable ? (
-          <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-sm gap-1 px-6 text-center">
-            <p className="text-gray-400">
-              Risk-Based Alerting is offline or disabled
-            </p>
-            <p className="text-xs text-gray-600">
-              Set <code className="text-gray-400">AISOC_FEATURE_RBA=true</code>{' '}
-              and ensure the fusion service (port 8082) is reachable. Entities
-              roll up automatically as alerts are observed.
-            </p>
-          </div>
-        ) : queueError ? (
-          <div className="flex items-center justify-center h-32 text-red-400 text-sm">
-            Failed to load entity queue
           </div>
         ) : entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500 gap-1">

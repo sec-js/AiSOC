@@ -25,6 +25,43 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { AddConnectorModal } from './AddConnectorModal';
 import { ConnectorInstanceList } from './ConnectorInstanceList';
 
+const DEMO_CONNECTORS: Connector[] = [
+  {
+    id: 'conn-001', name: 'CrowdStrike Falcon', type: 'crowdstrike',
+    status: 'active', enabled: true,
+    config: {}, alertCount: 4231, alertsIngested: 4231,
+    lastSync: '2026-05-06T12:30:00Z',
+    createdAt: '2026-03-15T10:00:00Z', updatedAt: '2026-05-06T12:30:00Z',
+  },
+  {
+    id: 'conn-002', name: 'Microsoft Sentinel', type: 'microsoft_sentinel',
+    status: 'active', enabled: true,
+    config: {}, alertCount: 2847, alertsIngested: 2847,
+    lastSync: '2026-05-06T12:28:00Z',
+    createdAt: '2026-03-20T14:00:00Z', updatedAt: '2026-05-06T12:28:00Z',
+  },
+  {
+    id: 'conn-003', name: 'Splunk Enterprise', type: 'splunk',
+    status: 'active', enabled: true,
+    config: {}, alertCount: 1893, alertsIngested: 1893,
+    lastSync: '2026-05-06T12:25:00Z',
+    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-05-06T12:25:00Z',
+  },
+  {
+    id: 'conn-004', name: 'AWS Security Hub', type: 'aws_security_hub',
+    status: 'error', enabled: true,
+    config: {}, alertCount: 567, alertsIngested: 567,
+    lastSync: '2026-05-06T08:15:00Z',
+    createdAt: '2026-04-10T11:00:00Z', updatedAt: '2026-05-06T08:15:00Z',
+  },
+  {
+    id: 'conn-005', name: 'Okta SSO', type: 'okta',
+    status: 'active', enabled: false,
+    config: {}, alertCount: 0, alertsIngested: 0,
+    createdAt: '2026-04-20T16:00:00Z', updatedAt: '2026-04-20T16:00:00Z',
+  },
+];
+
 export function ConnectorsView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -33,7 +70,7 @@ export function ConnectorsView() {
   const { data, error, isLoading, mutate } = useSWR(
     'connectors',
     () => connectorsApi.list(),
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, fallbackData: { connectors: DEMO_CONNECTORS } },
   );
 
   const connectors: Connector[] = useMemo(() => data?.connectors ?? [], [data]);
@@ -150,14 +187,12 @@ export function ConnectorsView() {
       </div>
 
       {/* Body */}
-      {error ? (
-        <ErrorState
-          title="Could not load connectors"
-          description="The API returned an error while fetching your connector instances. The connectors service may still be starting up."
-          error={error}
-          onRetry={() => mutate()}
-        />
-      ) : (
+      {error && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+          Connectors API unreachable — showing demo instances so you can explore the interface.
+        </div>
+      )}
+      {(
         <ConnectorInstanceList
           connectors={connectors}
           isLoading={isLoading && !data}

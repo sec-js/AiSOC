@@ -174,7 +174,7 @@ export function DetectionProposalsView() {
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                    <span>
+                    <span suppressHydrationWarning>
                       Updated{' '}
                       {formatDistanceToNow(new Date(p.updated_at), {
                         addSuffix: true,
