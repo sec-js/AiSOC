@@ -33,6 +33,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.services.case_fanout import (
+    FanoutResult,
+    fanout_create_case,
+    fanout_status_change,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +101,13 @@ class CreateCaseRequest(BaseModel):
     compliance_frameworks: list[str] = Field(default_factory=list)
     tags: dict[str, str] = Field(default_factory=dict)
     sla_due_at: datetime | None = None
+    # Workstream 8 — bidirectional ITSM. When the operator selects one or
+    # more connector instances at create time, the API fans the new case
+    # out to those external systems and persists the linkage in
+    # ``case_external_refs``. Connector instances must be tenant-owned,
+    # enabled, and declare ``Capability.PUSH_CASE`` (e.g. Jira,
+    # ServiceNow). Empty list = case stays AiSOC-only.
+    push_to_connector_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class UpdateCaseRequest(BaseModel):
@@ -159,6 +171,14 @@ class CaseResponse(BaseModel):
     created_by: str | None
     tags: dict[str, Any]
     sla_due_at: datetime | None
+    # Workstream 8 — populated only by ``POST /cases`` (create-time
+    # fan-out) and ``PATCH /cases/{id}`` when ``status`` is changed.
+    # The list is per-connector-instance and includes failures so the
+    # UI can show "Jira ✓ · ServiceNow ✗ (timeout)" beside the case
+    # without a follow-up GET. ``None`` (default) means "no fan-out
+    # was attempted on this call" and is distinct from ``[]`` ("fan-out
+    # was attempted but no connectors were selected").
+    fanout_results: list[FanoutResult] | None = None
 
 
 class CommentResponse(BaseModel):
@@ -410,10 +430,36 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
     try:
         row = (await db.execute(q)).fetchone()
         await db.commit()
-        return _row_to_case(row)
     except Exception as exc:
         await db.rollback()
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+    response = _row_to_case(row)
+
+    # Workstream 8 — fan out to operator-selected ITSM connectors. The
+    # case is already persisted (commit above) so a flaky Jira can't
+    # block the create. ``fanout_create_case`` swallows per-backend
+    # errors into the FanoutResult.status field; we only need to
+    # commit the ``case_external_refs`` writes it staged.
+    if body.push_to_connector_ids:
+        try:
+            results = await fanout_create_case(
+                db,
+                case_row=row,
+                tenant_id=user.tenant_id,
+                connector_ids=body.push_to_connector_ids,
+                pushed_by=getattr(user, "email", None),
+            )
+            await db.commit()
+            response.fanout_results = results
+        except Exception:
+            # Persistence of external refs failed but the AiSOC case
+            # itself is fine; surface the partial result and move on.
+            logger.exception("cases.create.fanout_persistence_failed case=%s", row.id)
+            await db.rollback()
+            response.fanout_results = []
+
+    return response
 
 
 @router.get("/{case_id}", response_model=CaseResponse, summary="Get case")
@@ -473,10 +519,36 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
     try:
         row = (await db.execute(q)).fetchone()
         await db.commit()
-        return _row_to_case(row)
     except Exception as exc:
         await db.rollback()
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+    response = _row_to_case(row)
+
+    # Workstream 8 — if the operator changed status, project the
+    # transition onto every connector this case is already linked to.
+    # ``fanout_status_change`` no-ops when the case has no
+    # ``case_external_refs`` rows yet, so the call is cheap for
+    # AiSOC-only cases.
+    if body.status and body.status != existing.status:
+        try:
+            results = await fanout_status_change(
+                db,
+                case_row=row,
+                tenant_id=user.tenant_id,
+                old_status=existing.status,
+                new_status=body.status,
+                pushed_by=getattr(user, "email", None),
+            )
+            if results:
+                await db.commit()
+                response.fanout_results = results
+        except Exception:
+            logger.exception("cases.update.fanout_persistence_failed case=%s", row.id)
+            await db.rollback()
+            response.fanout_results = []
+
+    return response
 
 
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
