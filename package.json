@@ -36,6 +36,8 @@
     "aisoc:demo": "tsx scripts/aisoc-demo.ts",
     "aisoc:demo:down": "docker compose -f docker-compose.demo.yml down -v",
     "aisoc:demo:logs": "docker compose -f docker-compose.demo.yml logs -f",
+    "aisoc:acceptance": "tsx scripts/aisoc-acceptance.ts",
+    "aisoc:acceptance:cold": "tsx scripts/aisoc-acceptance.ts --cold",
     "demo:public": "bash scripts/demo-public.sh",
     "demo:public:tunnel-only": "bash scripts/demo-public.sh --skip-stack",
     "demo:public:setup": "bash infra/cloudflare/tunnel.sh"

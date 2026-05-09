@@ -61,6 +61,23 @@ pnpm aisoc:demo:logs    # tails logs while the stack is up
 The orchestrator script lives at
 [`scripts/aisoc-demo.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-demo.ts).
 
+### Acceptance gate
+
+The buyer-value contract for v1.0 is **clone-to-investigation in ≤ 5 minutes on
+a clean Mac**. We measure it with a dedicated harness:
+
+```bash
+pnpm aisoc:acceptance          # warm start, default 5-minute budget
+pnpm aisoc:acceptance --cold   # prune cached demo images first (true clean clone)
+pnpm aisoc:acceptance --history-only   # print the trend ledger
+```
+
+The harness wraps `aisoc:demo`, enforces the budget, and appends a JSONL entry
+to `.aisoc/acceptance-history.jsonl` per run so regressions are visible across
+commits. Exit codes — `0` pass, `3` over budget, `4` showcase case never
+reached — make it easy to wire into CI without parsing logs. Source:
+[`scripts/aisoc-acceptance.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-acceptance.ts).
+
 ## Path B — full development stack
 
 Use this when you want to hack on AiSOC itself, run the eval harness, or

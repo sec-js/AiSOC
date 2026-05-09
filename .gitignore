@@ -80,6 +80,11 @@ eval_mitre_accuracy_report.json
 PROGRESS.md
 PR_TRIAGE.md
 
+# Acceptance harness ledger (.aisoc/acceptance-history.jsonl is per-machine and
+# accumulates across runs — useful for "is this getting slower?" but not for
+# version control. Same applies to any other harness state we drop in here.)
+.aisoc/
+
 # Detection-import upstream clones (populated by tools.detection_import)
 .import-cache/
 
