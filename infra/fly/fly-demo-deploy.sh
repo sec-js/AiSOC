@@ -145,10 +145,11 @@ fi
 #   4. web       last; serves traffic at tryaisoc.com
 #
 # The seeder is *not* a separate app  it ships inside the api image as
-# `python -m app.scripts.demo_seed`, and we invoke it via `flyctl ssh
-# console` post-deploy + a scheduled machine on the api app for the daily
-# cron. This avoids a duplicate Dockerfile + the cost of a fifth Fly app
-# whose only job is to run a 30-second script.
+# `python -m app.scripts.seed_demo`, runs automatically on every deploy via
+# `[deploy].release_command` in api/fly.toml, and is also wired up post-deploy
+# (belt-and-suspenders for first-time deploys) plus on a daily scheduled
+# machine for the 00:00 UTC refresh. This avoids a duplicate Dockerfile +
+# the cost of a fifth Fly app whose only job is to run a 30-second script.
 
 # deploy_app <fly-app-name> <fly.toml subdir under infra/fly/> <build-context dir>
 #
@@ -297,8 +298,16 @@ ensure_cert ws.tryaisoc.com  aisoc-demo-realtime
 #   - daily refresh (cron):        a scheduled Fly machine on aisoc-demo-api
 #     boots from the same image, runs the seeder, exits.
 #
-# Both paths execute `python -m app.scripts.demo_seed`; the canonical
-# implementation lives in services/api/app/scripts/demo_seed.py.
+# Both paths execute `python -m app.scripts.seed_demo`; the canonical
+# implementation lives in services/api/app/scripts/seed_demo.py and produces
+# the v1.0 canon (15 incidents including the in-flight INC-RT-001 LockBit
+# 3.0 case that the demo deeplink targets).
+#
+# Note: the api app's `[deploy].release_command` already runs
+# `alembic upgrade head && python -m app.scripts.seed_demo` on every
+# `flyctl deploy`, so the post-deploy ssh bootstrap below is a belt-and-
+# suspenders for first-time deploys. seed_demo.py is fully idempotent —
+# repeated runs against an already-seeded volume are a cheap no-op.
 if ! $SKIP_SEED; then
   log "running seed bootstrap inside aisoc-demo-api (one-shot via ssh)"
   # `ssh console -C` runs a single command on a live machine and exits. We
@@ -307,7 +316,7 @@ if ! $SKIP_SEED; then
   # reuse a fully-warm container instead of cold-booting another machine.
   flyctl ssh console \
     --app aisoc-demo-api \
-    --command "python -m app.scripts.demo_seed --reset --kickoff-investigation" \
+    --command "python -m app.scripts.seed_demo" \
     || err "(seed bootstrap failed; demo will be cold until daily cron runs)"
 
   log "ensuring daily seed cron at 00:00 UTC on aisoc-demo-api"
@@ -325,7 +334,7 @@ if ! $SKIP_SEED; then
     --vm-size shared-cpu-1x \
     --vm-memory 512 \
     --name aisoc-demo-seed-cron \
-    -- python -m app.scripts.demo_seed --reset --kickoff-investigation \
+    -- python -m app.scripts.seed_demo \
     2>/dev/null || log "(daily seed cron already configured)"
 fi
 
@@ -353,7 +362,7 @@ log ""
 log "Smoke test:"
 log "  curl -sf https://aisoc-demo-api.fly.dev/health"
 log "  curl -sf https://api.tryaisoc.com/health     # after DNS propagates"
-log "  open https://tryaisoc.com/cases/INC-001?tab=ledger"
+log "  open https://tryaisoc.com/cases/INC-RT-001?tab=ledger"
 log ""
 log "Cert status (run after DNS is live):"
 log "  flyctl certs show tryaisoc.com     --app aisoc-demo-web"

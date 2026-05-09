@@ -6,14 +6,19 @@
  *   1. Verify Docker + docker compose are present
  *   2. Pull prebuilt images from ghcr.io/beenuar/* (no local builds)
  *   3. docker compose up -d using docker-compose.demo.yml (slim profile)
+ *      — the `seed` service runs `python -m app.scripts.seed_demo` once
+ *      automatically when the api is healthy, then exits cleanly.
  *   4. Wait for postgres + api to be healthy
- *   5. Seed demo data via `python -m app.scripts.seed_demo`
- *   6. Query the API for a seeded case UUID (dev mode auth bypass)
+ *   5. Re-run the seeder as a safety net (idempotent inside seed_demo.py)
+ *   6. Query the API for the showcase ransomware case (INC-RT-001) with a
+ *      fallback to the first available case if the showcase is missing
  *   7. Kick off an investigation on that case
- *   8. Open the user's browser at /cases/<uuid>
+ *   8. Open the user's browser at /cases/INC-RT-001?tab=ledger
  *
  * On a warm Docker daemon the full path is roughly 3.5 minutes:
- * about 90s pull + 60s startup + 30s seed + 30s investigation.
+ * about 90s pull + 60s startup + 30s seed + 30s investigation. The
+ * v1.0 acceptance gate is clone-to-investigation in ≤ 5 minutes on a
+ * clean Mac with a cold Docker daemon.
  *
  * Usage: pnpm aisoc:demo
  *
@@ -408,11 +413,31 @@ async function kickoffInvestigation(caseId: string): Promise<boolean> {
   return false;
 }
 
-async function openInBrowser(caseId: string | null, flags: Flags) {
-  const url =
-    caseId !== null
-      ? `http://localhost:3000/cases/${caseId}`
-      : "http://localhost:3000/cases";
+// Validates a case_number like "INC-RT-001" / "INC-001" before splicing it
+// into the URL. Defensive against arbitrary strings the API might return —
+// the cases endpoint has resolved arbitrary identifiers in the past.
+const CASE_NUMBER_RE = /^[A-Za-z0-9_-]{1,32}$/;
+function sanitizeCaseNumber(num: unknown): string | null {
+  if (typeof num === "string" && CASE_NUMBER_RE.test(num)) return num;
+  return null;
+}
+
+async function openInBrowser(
+  seeded: { id: string; case_number: string; title: string } | null,
+  flags: Flags,
+) {
+  // Prefer routing by human-readable case_number with the ledger tab
+  // pre-selected — that's the same URL the hosted demo uses and what
+  // NEXT_PUBLIC_DEMO_DEEPLINK points at, so docs/screenshots/local-demo
+  // all land in the same place. The Next.js [id] route resolves both
+  // case_number and UUID via the API's case_number_or_id lookup
+  // (services/api/app/api/v1/endpoints/cases.py).
+  const safeNumber = seeded ? sanitizeCaseNumber(seeded.case_number) : null;
+  const url = seeded
+    ? safeNumber
+      ? `http://localhost:3000/cases/${safeNumber}?tab=ledger`
+      : `http://localhost:3000/cases/${seeded.id}?tab=ledger`
+    : "http://localhost:3000/cases";
   step(7, 7, `Opening browser at ${url}`);
   if (flags.noOpen) {
     log(c.dim("--no-open: not launching browser"));
@@ -459,7 +484,7 @@ async function main() {
   if (seededCase) {
     await kickoffInvestigation(seededCase.id);
   }
-  await openInBrowser(seededCase?.id ?? null, flags);
+  await openInBrowser(seededCase, flags);
   process.exit(0);
 }
 

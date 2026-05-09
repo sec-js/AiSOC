@@ -63,9 +63,10 @@ this stack is engineered for.
    │  aisoc-demo-seed-cron (scheduled machine)    │  no public traffic
    │  Lives on the aisoc-demo-api app, runs       │
    │  daily at 00:00 UTC using the api image:     │
-   │   1. wipe demo tenant                        │
-   │   2. seed canonical alerts/cases             │
-   │   3. POST /investigate INC-001               │
+   │   1. python -m app.scripts.seed_demo         │
+   │   2. seeder is idempotent — refreshes        │
+   │      INC-RT-001 + 14 other canonical cases   │
+   │   3. visitors get a hot demo at all times    │
    └──────────────────────────────────────────────┘
 ```
 
@@ -95,39 +96,49 @@ infra/fly/
 ```
 
 The seeder is **not** a separate app. It ships inside the api image as
-`python -m app.scripts.demo_seed`, which lets us run it two ways without
+`python -m app.scripts.seed_demo`, which lets us run it three ways without
 maintaining a fifth Dockerfile or Fly app:
 
 | When                     | How                                                                                  |
 |--------------------------|--------------------------------------------------------------------------------------|
-| Post-deploy (bootstrap)  | `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.demo_seed --reset --kickoff-investigation"` runs once on a live api machine, populating Postgres and starting the canonical investigation in ~30s. |
+| Every deploy             | `[deploy].release_command` in `infra/fly/api/fly.toml` runs `alembic upgrade head && python -m app.scripts.seed_demo` on every `flyctl deploy`. Idempotent — a no-op against an already-seeded volume. |
+| Post-deploy (bootstrap)  | `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.seed_demo"` runs once on a live api machine. Belt-and-suspenders for first-time deploys. |
 | Daily refresh (00:00 UTC)| A scheduled Fly machine on the `aisoc-demo-api` app, named `aisoc-demo-seed-cron`, boots from the same api image, runs the same command, and exits. |
-| Local recovery           | `python scripts/demo_seed.py --reset` from the repo root — the shim re-execs the canonical module against your `docker-compose` stack. |
+| Local recovery           | `python -m app.scripts.seed_demo` inside the api container of a `docker-compose -f docker-compose.demo.yml` stack — same module, same idempotency. |
 
 The canonical implementation lives in
-[`services/api/app/scripts/demo_seed.py`](../../services/api/app/scripts/demo_seed.py);
-[`scripts/demo_seed.py`](../../scripts/demo_seed.py) is a thin shim for repo-root invocation.
+[`services/api/app/scripts/seed_demo.py`](../../services/api/app/scripts/seed_demo.py).
+The seeder mints 15 incidents (ransomware/phishing/credential-access/lateral/
+exfil/cloud) plus the in-flight `INC-RT-001` LockBit 3.0 investigation that
+the onboarding deeplink targets.
 
 The seed flow is the secret sauce for the TTFI budget:
 
 ```
-00:00 UTC  ┌────────────────────────────────────────────────────┐
-           │ 1. scheduled machine boots from api image          │
-           │ 2. runs `python -m app.scripts.demo_seed --reset   │
-           │    --kickoff-investigation`                        │
-           │ 3. POSTs /api/v1/cases/INC-001/investigate         │
-           │ 4. agents.internal streams events → realtime       │
-           │ 5. realtime broadcasts → web WS connections        │
-           │ Investigation completes within 30-90s.             │
-           └────────────────────────────────────────────────────┘
+On every deploy  ┌────────────────────────────────────────────────────┐
+                 │ 1. flyctl deploy ships api/agents/realtime/web     │
+                 │ 2. release_command runs alembic + seed_demo        │
+                 │ 3. Postgres now contains INC-RT-001 + 14 others    │
+                 │ 4. Visitors land at /cases/INC-RT-001?tab=ledger   │
+                 │    with the agent already mid-stream.              │
+                 └────────────────────────────────────────────────────┘
 
-T+anytime  ┌────────────────────────────────────────────────────┐
-           │ Visitor lands at /cases/INC-001?tab=ledger         │
-           │   - case is already CREATED                        │
-           │   - investigation_run is COMPLETED or RUNNING      │
-           │   - ledger has 20-50 events ready to stream        │
-           │ Time-to-first-investigation: 0s (already running). │
-           └────────────────────────────────────────────────────┘
+00:00 UTC daily  ┌────────────────────────────────────────────────────┐
+                 │ 1. scheduled machine boots from api image          │
+                 │ 2. runs `python -m app.scripts.seed_demo`          │
+                 │ 3. Refreshes the showcase case for the next 24h    │
+                 │    of visitors. All writes happen under the demo   │
+                 │    tenant's RLS scope.                             │
+                 └────────────────────────────────────────────────────┘
+
+T+anytime        ┌────────────────────────────────────────────────────┐
+                 │ Visitor lands at /cases/INC-RT-001?tab=ledger      │
+                 │   - case is already CREATED                        │
+                 │   - investigation_run is RUNNING or COMPLETED      │
+                 │   - ledger has 20-50 events ready to stream        │
+                 │   - playbook DAG mid-execution                     │
+                 │ Time-to-first-investigation: 0s (already running). │
+                 └────────────────────────────────────────────────────┘
 ```
 
 ## First-time setup
@@ -179,7 +190,7 @@ flag drives two pieces of behavior:
 1. **API middleware (`services/api/app/middleware/demo_mode.py`)**
    Returns 403 for non-allowlisted writes (POST/PUT/PATCH/DELETE) and stamps
    `X-AiSOC-Demo: true` plus `X-AiSOC-Demo-Banner` headers on every response.
-   Allowlisted writes: auth flows, `/cases/INC-001/investigate`, alert ack.
+   Allowlisted writes: auth flows, `/cases/INC-RT-001/investigate`, alert ack.
 
 2. **Web banner (`apps/web/src/components/demo/DemoBanner.tsx`)**
    Renders a fixed amber strip at the top of every authenticated page with
@@ -206,7 +217,7 @@ curl -si -X POST https://aisoc-demo-api.fly.dev/api/v1/cases | head -3
 curl -sf https://api.tryaisoc.com/health
 
 # Visitor flow
-open https://tryaisoc.com/cases/INC-001?tab=ledger
+open https://tryaisoc.com/cases/INC-RT-001?tab=ledger
 ```
 
 ## Troubleshooting
@@ -216,7 +227,7 @@ open https://tryaisoc.com/cases/INC-001?tab=ledger
 | `flyctl deploy` hangs on builder            | Nuke remote builder: `flyctl builders destroy`     |
 | API 503 on first hit                        | Cold start; `min_machines_running=1` should fix    |
 | Web shows "demo data resets" but writes work| API's `AISOC_DEMO_MODE` not set; redeploy api       |
-| INC-001 case missing                         | Re-run seed: `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.demo_seed --reset --kickoff-investigation"` |
+| `INC-RT-001` case missing                    | Re-run seed: `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.seed_demo"` (idempotent) |
 | Daily seed cron not firing                   | Verify the scheduled machine: `flyctl machine list -a aisoc-demo-api` (look for `aisoc-demo-seed-cron`) |
 | WS disconnects in 30s                        | Realtime `auto_stop_machines = "off"` — verify fly.toml |
 | Cert pending                                 | `flyctl certs show tryaisoc.com --app aisoc-demo-web` (and same for `api.` / `ws.` subdomains) |

@@ -377,7 +377,7 @@ The marketing landing lives at `/` and the console at `/dashboard`. Both share t
 
 ### One-shot demo
 
-To see AiSOC investigate a seeded case in your browser:
+To see AiSOC investigate an in-flight ransomware case in your browser:
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
@@ -385,19 +385,36 @@ cd AiSOC
 pnpm aisoc:demo
 ```
 
-That command pulls prebuilt images from `ghcr.io/beenuar/*`, brings up the slim demo profile (postgres, redis, kafka, api, agents, realtime, web), seeds canonical demo data, runs an AI investigation against a seeded case, and opens your browser at `/cases/<uuid>`.
+That single command:
 
-Approximate timings on a warm Docker daemon:
+1. Pulls prebuilt images from `ghcr.io/beenuar/*` (api, agents, web, realtime).
+2. Brings up the slim demo profile — Postgres, Redis, Kafka, api, agents, realtime, web.
+3. Runs the canonical-data seeder (`services/api/app/scripts/seed_demo.py`) as a one-shot container that exits when finished. The seeder is idempotent: re-running it is a no-op against an already-seeded volume.
+4. Locates `INC-RT-001` — a LockBit 3.0 ransomware investigation that's mid-stream when you arrive (encryption is in progress, the agent is streaming decisions to the Investigation Ledger, an auto-isolation playbook is mid-DAG).
+5. Opens your browser directly at `/cases/INC-RT-001?tab=ledger`, with the demo analyst (`demo@aisoc.dev`) already auto-logged-in.
+
+Target on a clean Mac with a warm Docker daemon: **clone-to-investigation in under 5 minutes**.
 
 | Step | Time |
 |---|---|
-| `docker compose pull` | ~90s |
+| `docker compose pull` (cold) | ~90s |
 | `docker compose up` + healthchecks | ~60s |
-| Seed canonical data | ~30s |
-| Kick off investigation | ~30s |
-| Total | ~3.5 min |
+| Seed canonical data (one-shot container) | ~30s |
+| Kick off live investigation step | ~30s |
+| Total | ~3.5 min warm / ~5 min cold |
 
-When you're done: `pnpm aisoc:demo:down` (deletes the demo volumes).
+What you'll see when the browser opens:
+
+- **Investigation Ledger** — the agent's per-step prompt, response, evidence cited, and tool calls for `INC-RT-001`, replayable from any step.
+- **Decision graph** — Cytoscape view of the LangGraph traversal that produced the verdict.
+- **Playbook timeline** — the in-flight ransomware containment DAG, with completed and pending steps.
+- **15 other seeded cases** — phishing, credential access, lateral movement, exfiltration, cloud takeover — across `INC-PH-*`, `INC-CR-*`, `INC-LM-*`, `INC-EX-*`, `INC-CL-*` series, all with populated alerts, IOCs, and ledger artifacts.
+
+When you're done: `pnpm aisoc:demo:down` (stops containers and deletes the demo volumes).
+
+#### Hosted, public-internet equivalent
+
+The same stack ships a Cloudflare Tunnel template (see [Public demo on your own domain](#public-demo-on-your-own-domain)) and tested deployment configs for [Render](infra/render/render.yaml) and [Fly.io](infra/fly/) — both wire `alembic upgrade head && python -m app.scripts.seed_demo` into the deploy lifecycle so the same `INC-RT-001` showcase is present after `render blueprint launch` or `fly deploy`.
 
 The full development quick start with all services (UEBA, Honeytokens, Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant) is below.
 
