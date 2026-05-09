@@ -294,18 +294,23 @@ export function OnboardingView() {
         </section>
       )}
 
-      {/* Footnote: where to go next once connected */}
+      {/* Footnote: where to go next once connected.
+       *
+       * The push-ingest docs live on the Docusaurus site (separate origin from
+       * the Next.js app), so we link out to GH Pages rather than to a path
+       * under tryaisoc.com that would 404. The detections route is singular
+       * (/detection) — earlier copy here said /detections and 404'd. */}
       <section className="mt-12 grid sm:grid-cols-2 gap-4">
         <NextStepCard
           title="Bring your own data"
           body="No connector for your tool? Push raw events into AiSOC over a tenant-scoped HTTPS endpoint."
-          href="/docs/operations/credentials"
+          href="https://beenuar.github.io/AiSOC/docs/operations/credentials/"
           cta="Push-ingest docs"
         />
         <NextStepCard
           title="Run a detection"
           body="Already connected? Validate the pipeline end-to-end with a synthetic detection."
-          href="/detections"
+          href="/detection"
           cta="Open detections"
         />
       </section>
@@ -426,14 +431,34 @@ function NextStepCard({
   href: string;
   cta: string;
 }) {
-  return (
-    <Link
-      href={href}
-      className="block rounded-xl border border-gray-800 bg-gray-900/40 hover:bg-gray-900 hover:border-blue-500/40 p-5 transition-colors"
-    >
+  // Cross-origin links (docs site on GH Pages) need a real <a> with
+  // target=_blank — next/link is for in-app routing only. Keeping the same
+  // markup otherwise so the visual treatment stays identical.
+  const isExternal = /^https?:\/\//i.test(href);
+  const className =
+    'block rounded-xl border border-gray-800 bg-gray-900/40 hover:bg-gray-900 hover:border-blue-500/40 p-5 transition-colors';
+  const inner = (
+    <>
       <div className="text-sm font-medium text-gray-100 mb-1">{title}</div>
       <p className="text-sm text-gray-500 mb-3 leading-relaxed">{body}</p>
       <span className="text-xs text-blue-400 group-hover:text-blue-300">{cta} →</span>
+    </>
+  );
+  if (isExternal) {
+    return (
+      <a
+        href={href}
+        className={className}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {inner}
     </Link>
   );
 }
