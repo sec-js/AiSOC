@@ -24,11 +24,20 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
-import { connectorsApi, type Connector, type ConnectorStatus } from '@/lib/api';
+import {
+  connectorsApi,
+  deploymentApi,
+  type AirgapStatus,
+  type Connector,
+  type ConnectorStatus,
+  type LlmProvider,
+  type LlmStatus,
+} from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
+import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +49,7 @@ type TabId =
   | 'api-keys'
   | 'notifications'
   | 'appearance'
+  | 'deployment'
   | 'audit'
   | 'about';
 
@@ -325,6 +335,12 @@ const TABS: { id: TabId; label: string; description: string }[] = [
     description: 'Theme, density, animations.',
   },
   {
+    id: 'deployment',
+    label: 'Deployment & AI',
+    description:
+      'Live air-gap policy and LLM provider snapshot for this AiSOC pod.',
+  },
+  {
     id: 'audit',
     label: 'Audit log',
     description: 'Recent administrative events.',
@@ -402,6 +418,7 @@ export function SettingsView() {
               {tab === 'api-keys' && <ApiKeysPanel />}
               {tab === 'notifications' && <NotificationsPanel />}
               {tab === 'appearance' && <AppearancePanel />}
+              {tab === 'deployment' && <DeploymentAIPanel />}
               {tab === 'audit' && <AuditPanel />}
               {tab === 'about' && <AboutPanel />}
             </motion.div>
@@ -1169,6 +1186,8 @@ function NotificationsPanel() {
 
 function AppearancePanel() {
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
+  const { preference: themePreference, setPreference: setThemePreference } =
+    useTheme();
 
   useEffect(() => {
     setPrefs(loadPreferences());
@@ -1182,6 +1201,16 @@ function AppearancePanel() {
     });
   };
 
+  // Theme is owned by the global ThemeProvider (it sets `data-theme` on
+  // <html>, primes the FOUC script, and persists to its own storage key).
+  // We mirror it into the legacy `prefs.theme` slot so settings exports stay
+  // accurate, but `useTheme()` is the source of truth for what the operator
+  // sees on screen.
+  const onThemeSelect = (next: ThemePreference) => {
+    setThemePreference(next);
+    update('theme', next);
+  };
+
   return (
     <div>
       <PanelHeader
@@ -1193,24 +1222,23 @@ function AppearancePanel() {
         <div>
           <p className="text-sm font-medium text-gray-300">Theme</p>
           <p className="mt-1 text-xs text-gray-500">
-            AiSOC ships dark-first; light mode coming soon.
+            Pick the palette this browser uses. Stored locally — no server
+            round-trip.
           </p>
           <div className="mt-3 grid grid-cols-3 gap-3">
-            {(['system', 'dark', 'light'] as const).map((t) => {
-              const active = prefs.theme === t;
-              const disabled = t === 'light';
+            {(['system', 'dark', 'light'] as const satisfies readonly ThemePreference[]).map((t) => {
+              const active = themePreference === t;
               return (
                 <button
                   key={t}
                   type="button"
-                  disabled={disabled}
-                  onClick={() => update('theme', t)}
+                  onClick={() => onThemeSelect(t)}
+                  aria-pressed={active}
                   className={clsx(
                     'rounded-xl border p-3 text-left transition-colors',
                     active
                       ? 'border-blue-500/60 bg-blue-500/10'
                       : 'border-gray-800 bg-gray-950/40 hover:border-gray-700',
-                    disabled && 'cursor-not-allowed opacity-40',
                   )}
                 >
                   <span className="block text-sm font-medium capitalize text-gray-100">
@@ -1221,7 +1249,7 @@ function AppearancePanel() {
                       ? 'Match OS preference'
                       : t === 'dark'
                       ? 'Operations-room dark'
-                      : 'Coming soon'}
+                      : 'High-contrast light'}
                   </span>
                 </button>
               );
@@ -1270,6 +1298,338 @@ function AppearancePanel() {
         />
       </div>
     </div>
+  );
+}
+
+// ─── Panel: Deployment & AI ───────────────────────────────────────────────────
+//
+// Read-only operator visibility for two questions that are always asked during
+// security review:
+//
+//   1. "Is air-gap actually engaged on this pod?"            → /api/v1/airgap/status
+//   2. "Where will my AI calls actually go?"                 → /api/v1/llm/status
+//
+// Both endpoints are server-rendered snapshots that mirror the same code paths
+// the runtime uses to gate egress (``app.core.airgap.is_host_allowed_for_airgap``)
+// and to pick the LLM transport (``services/agents/app/api/explain.py``). That
+// is deliberate: the indicator the operator sees here CANNOT drift from runtime
+// behaviour — there is no second source of truth.
+//
+// This panel never accepts input. It is purely a diagnostic surface; mutations
+// happen out-of-band (env vars, deploy-time config, BYOK rotation).
+
+const PROVIDER_LABEL: Record<LlmProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  'azure-openai': 'Azure OpenAI',
+  'local-ollama': 'Local Ollama',
+  'local-vllm': 'Local vLLM',
+  'local-litellm': 'Local LiteLLM',
+  custom: 'Custom endpoint',
+  none: 'Not configured',
+};
+
+function DeploymentAIPanel() {
+  const airgap = useSWR(
+    'settings:airgap-status',
+    () => deploymentApi.getAirgapStatus(),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const llm = useSWR(
+    'settings:llm-status',
+    () => deploymentApi.getLlmStatus(),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  const isLoading = airgap.isLoading || llm.isLoading;
+  const error = airgap.error ?? llm.error;
+  const onRetry = () => {
+    airgap.mutate();
+    llm.mutate();
+  };
+
+  return (
+    <div>
+      <PanelHeader
+        title="Deployment & AI"
+        description="Live air-gap policy and LLM provider snapshot for this AiSOC pod. Read-only."
+      />
+      <div className="space-y-5 px-6 py-5">
+        {isLoading && !airgap.data && !llm.data ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : error ? (
+          <ErrorState
+            title="Could not load deployment status"
+            error={error}
+            onRetry={onRetry}
+          />
+        ) : (
+          <>
+            {airgap.data ? <AirgapCard status={airgap.data} /> : null}
+            {llm.data ? (
+              <LlmCard llm={llm.data} airgap={airgap.data ?? null} />
+            ) : null}
+            <p className="text-xs text-gray-500">
+              These values are sampled live from this pod and mirror the egress
+              gate exactly. To change them, update environment variables and
+              redeploy. See{' '}
+              <a
+                href="https://beenuar.github.io/AiSOC/docs/operations/airgap/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 hover:text-blue-300 hover:underline"
+              >
+                Air-gapped deployments
+              </a>
+              .
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AirgapCard({ status }: { status: AirgapStatus }) {
+  return (
+    <section
+      className="rounded-xl border border-gray-800 bg-gray-950/40 p-5"
+      aria-label="Air-gap policy"
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-100">Air-gap policy</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Enforced by the egress gate before any outbound HTTP request.
+          </p>
+        </div>
+        <StatusPill
+          tone={status.enabled ? 'emerald' : 'gray'}
+          label={status.enabled ? 'Enabled' : 'Disabled'}
+        />
+      </header>
+
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <KeyValue label="Policy">{status.policy}</KeyValue>
+        <KeyValue label="Operator allowlist">
+          {status.allowlist.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {status.allowlist.map((host) => (
+                <code
+                  key={host}
+                  className="rounded bg-gray-900 px-1.5 py-0.5 font-mono text-[11px] text-gray-200"
+                >
+                  {host}
+                </code>
+              ))}
+            </div>
+          ) : (
+            <span className="text-gray-500">— none configured —</span>
+          )}
+        </KeyValue>
+        <KeyValue label="Always-allowed private suffixes">
+          <div className="flex flex-wrap gap-1.5">
+            {status.implicit_private_suffixes.map((suffix) => (
+              <code
+                key={suffix}
+                className="rounded bg-gray-900 px-1.5 py-0.5 font-mono text-[11px] text-gray-400"
+              >
+                {suffix}
+              </code>
+            ))}
+          </div>
+        </KeyValue>
+      </dl>
+    </section>
+  );
+}
+
+function LlmCard({
+  llm,
+  airgap,
+}: {
+  llm: LlmStatus;
+  airgap: AirgapStatus | null;
+}) {
+  const providerLabel = PROVIDER_LABEL[llm.provider] ?? llm.provider;
+  const isFallback = llm.effective_path === 'fallback';
+  const blockedByAirgap = llm.airgap_enabled && !llm.airgap_compliant;
+
+  return (
+    <section
+      className="rounded-xl border border-gray-800 bg-gray-950/40 p-5"
+      aria-label="LLM provider"
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-100">LLM provider</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Where Explain, triage, and other AI features will call out to.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {llm.is_local ? (
+            <StatusPill tone="emerald" label="Local" />
+          ) : llm.provider === 'none' ? (
+            <StatusPill tone="gray" label="Unconfigured" />
+          ) : (
+            <StatusPill tone="amber" label="Cloud" />
+          )}
+          {isFallback ? (
+            <StatusPill tone="amber" label="Fallback path" />
+          ) : (
+            <StatusPill tone="emerald" label="Live" />
+          )}
+        </div>
+      </header>
+
+      {blockedByAirgap ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200"
+        >
+          <p className="font-semibold text-red-100">
+            Air-gap policy is blocking this LLM host.
+          </p>
+          <p className="mt-1">
+            <code className="font-mono">{llm.host || '—'}</code> is not in the
+            operator allowlist. Live AI calls will refuse and Explain will fall
+            back to the deterministic OCSF/MITRE summary. Add the host to{' '}
+            <code className="font-mono">AISOC_AIRGAP_ALLOWLIST</code> or switch
+            to a private LLM endpoint.
+          </p>
+        </div>
+      ) : isFallback && llm.provider !== 'none' ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200"
+        >
+          <p className="font-semibold text-amber-100">
+            Falling back to deterministic summaries.
+          </p>
+          <p className="mt-1">{llm.policy_note}</p>
+        </div>
+      ) : null}
+
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <KeyValue label="Provider">{providerLabel}</KeyValue>
+        <KeyValue label="Model">
+          {llm.model ? (
+            <code className="font-mono text-xs text-gray-100">{llm.model}</code>
+          ) : (
+            <span className="text-gray-500">—</span>
+          )}
+        </KeyValue>
+        <KeyValue label="Base URL">
+          {llm.base_url ? (
+            <code className="break-all font-mono text-xs text-gray-200">
+              {llm.base_url}
+            </code>
+          ) : (
+            <span className="text-gray-500">—</span>
+          )}
+        </KeyValue>
+        <KeyValue label="Host">
+          {llm.host ? (
+            <code className="font-mono text-xs text-gray-200">{llm.host}</code>
+          ) : (
+            <span className="text-gray-500">—</span>
+          )}
+        </KeyValue>
+        <KeyValue label="API key">
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs',
+              llm.key_set ? 'text-emerald-300' : 'text-gray-400',
+            )}
+          >
+            <span
+              aria-hidden
+              className={clsx(
+                'inline-block h-1.5 w-1.5 rounded-full',
+                llm.key_set ? 'bg-emerald-400' : 'bg-gray-600',
+              )}
+            />
+            {llm.key_set ? 'Set' : 'Not set'}
+          </span>
+        </KeyValue>
+        <KeyValue label="Air-gap compliant">
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs',
+              llm.airgap_compliant ? 'text-emerald-300' : 'text-red-300',
+            )}
+          >
+            <span
+              aria-hidden
+              className={clsx(
+                'inline-block h-1.5 w-1.5 rounded-full',
+                llm.airgap_compliant ? 'bg-emerald-400' : 'bg-red-400',
+              )}
+            />
+            {airgap && !airgap.enabled
+              ? 'N/A — air-gap off'
+              : llm.airgap_compliant
+              ? 'Yes'
+              : 'No'}
+          </span>
+        </KeyValue>
+      </dl>
+
+      {!blockedByAirgap && !isFallback && llm.policy_note ? (
+        <p className="mt-4 text-xs text-gray-500">{llm.policy_note}</p>
+      ) : null}
+    </section>
+  );
+}
+
+function KeyValue({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <dt className="text-[11px] uppercase tracking-wide text-gray-500">
+        {label}
+      </dt>
+      <dd className="text-sm text-gray-200">{children}</dd>
+    </div>
+  );
+}
+
+function StatusPill({
+  tone,
+  label,
+}: {
+  tone: 'emerald' | 'amber' | 'red' | 'gray';
+  label: string;
+}) {
+  const cls = clsx(
+    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium',
+    tone === 'emerald' && 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+    tone === 'amber' && 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    tone === 'red' && 'border-red-500/40 bg-red-500/10 text-red-200',
+    tone === 'gray' && 'border-gray-700 bg-gray-900 text-gray-300',
+  );
+  const dotCls = clsx(
+    'inline-block h-1.5 w-1.5 rounded-full',
+    tone === 'emerald' && 'bg-emerald-400',
+    tone === 'amber' && 'bg-amber-400',
+    tone === 'red' && 'bg-red-400',
+    tone === 'gray' && 'bg-gray-500',
+  );
+  return (
+    <span className={cls}>
+      <span aria-hidden className={dotCls} />
+      {label}
+    </span>
   );
 }
 

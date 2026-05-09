@@ -132,6 +132,51 @@ The endpoint returns no secrets — only the boolean `enabled` flag, the
 operator-supplied allowlist, the implicit private suffixes, and a
 human-readable `policy` field suitable for embedding in audit reports.
 
+### LLM provider snapshot
+
+There is a companion endpoint at `GET /api/v1/llm/status` that returns the
+live LLM provider snapshot — model, base URL, host, whether an API key is
+set, whether the host would be permitted by the egress gate at request
+time, and whether Explain would currently take the live path or the
+deterministic OCSF/MITRE fallback path. The endpoint mirrors the same
+classification function the runtime uses, so the indicator cannot drift
+from real behaviour:
+
+```bash
+curl -s http://aisoc-api.internal/api/v1/llm/status | jq
+{
+  "provider": "local-ollama",
+  "model": "llama3.1:8b",
+  "base_url": "http://ollama:11434/v1",
+  "host": "ollama",
+  "key_set": true,
+  "airgap_enabled": true,
+  "airgap_compliant": true,
+  "is_local": true,
+  "effective_path": "live",
+  "policy_note": "Local LLM in use; air-gap policy is satisfied."
+}
+```
+
+The API key itself is **never** returned — not even partially redacted.
+Only the boolean `key_set` flag is surfaced.
+
+### Settings UI surface
+
+The same two endpoints back the read-only **Settings → Deployment & AI**
+panel in the AiSOC web UI. Operators and auditors can use that panel
+during a walk-through to confirm at a glance:
+
+- Air-gap is enabled on this pod.
+- The configured LLM host is air-gap compliant (in the allowlist or
+  classified as private).
+- Explain would currently take the live LLM path, not the deterministic
+  fallback.
+
+Mutations are deliberately not exposed there — air-gap and LLM
+configuration is deploy-time only, set via environment variables and a
+service restart.
+
 ## Plugging in a local LLM
 
 AiSOC's investigator agent, NL detection authoring, NL query, phishing

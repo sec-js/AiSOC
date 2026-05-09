@@ -31,6 +31,7 @@ from app.api.v1.endpoints import (
     inbox_itsm,
     knowledge_base,
     lake,
+    llm_status,
     nl_detection,
     nl_query,
     oauth,
@@ -140,6 +141,12 @@ api_router.include_router(reports.router)
 
 # Air-gap status snapshot for operators — Tier 3.1 (air-gapped certification)
 api_router.include_router(airgap.router)
+
+# LLM provider visibility for the "Deployment & AI" Settings panel.
+# Mirrors /airgap/status: read-only env-var snapshot, never returns the
+# API key itself. Same code path the egress gate uses, so the indicator
+# in the UI cannot drift from runtime behaviour (WS-H2/H4 visibility).
+api_router.include_router(llm_status.router)
 
 # STIX/TAXII threat intelligence publishing (Tier 4)
 api_router.include_router(stix_taxii.router)

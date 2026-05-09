@@ -2901,6 +2901,78 @@ export const feedbackApi = {
   summary: () => request<OverrideSummary>('/api/v1/feedback/summary'),
 };
 
+// ─── Deployment & AI (air-gap + LLM provider snapshot) ───────────────────────
+//
+// Read-only operator visibility for "where will my AI calls actually go?" and
+// "is air-gap actually engaged on this pod?". Both endpoints are unauthenticated
+// snapshots that mirror the same code paths the runtime uses to gate egress
+// (``app.core.airgap.is_host_allowed_for_airgap``) and pick the LLM transport
+// (``services/agents/app/api/explain.py``), so the indicator the operator sees
+// in the Settings → "Deployment & AI" panel cannot drift from runtime behaviour.
+
+export interface AirgapStatus {
+  /** True when AISOC_AIRGAPPED is set; the egress gate is enforcing. */
+  enabled: boolean;
+  /** Operator-supplied AISOC_AIRGAP_ALLOWLIST entries. */
+  allowlist: string[];
+  /** Always-allowed private/internal suffixes (.local, .internal, ...). */
+  implicit_private_suffixes: string[];
+  /** Human-readable summary suitable for audit reports. */
+  policy: string;
+}
+
+export type LlmProvider =
+  | 'openai'
+  | 'anthropic'
+  | 'azure-openai'
+  | 'local-ollama'
+  | 'local-vllm'
+  | 'local-litellm'
+  | 'custom'
+  | 'none';
+
+export type LlmEffectivePath = 'live' | 'fallback';
+
+export interface LlmStatus {
+  /** Stable provider id classified from the configured base URL. */
+  provider: LlmProvider;
+  /** LLM_MODEL / OPENAI_MODEL / AISOC_LLM_MODEL — empty string when unset. */
+  model: string;
+  /** Configured base URL (LLM_BASE_URL or OPENAI_BASE_URL). Empty when unset. */
+  base_url: string;
+  /** Hostname extracted from base_url (lowercased), or "" when no base_url. */
+  host: string;
+  /**
+   * Whether ``OPENAI_API_KEY`` / ``LLM_API_KEY`` is set. The key itself is
+   * never returned — even partially redacted.
+   */
+  key_set: boolean;
+  /** Mirrors AirgapStatus.enabled. */
+  airgap_enabled: boolean;
+  /**
+   * Whether the configured LLM host would be permitted by the egress gate at
+   * request time. Always true when air-gap is OFF or no LLM is configured.
+   */
+  airgap_compliant: boolean;
+  /** Best-effort "this is clearly a local LLM" hint for the UI badge. */
+  is_local: boolean;
+  /**
+   * Which branch the Explain endpoint would actually take right now:
+   * ``live`` = real LLM call, ``fallback`` = deterministic OCSF/MITRE summary.
+   */
+  effective_path: LlmEffectivePath;
+  /** Operator-readable explanation of the current state. */
+  policy_note: string;
+}
+
+export const deploymentApi = {
+  /** Live air-gap policy snapshot for this pod. Safe to poll. */
+  getAirgapStatus: () => request<AirgapStatus>('/api/v1/airgap/status'),
+
+  /** Live LLM provider snapshot. Mirrors the egress gate's classification. */
+  getLlmStatus: () => request<LlmStatus>('/api/v1/llm/status'),
+};
+
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────
 
 export const realtimeApi = {
@@ -2943,4 +3015,5 @@ export default {
   passkey: passkeyApi,
   autonomyPolicy: autonomyPolicyApi,
   feedback: feedbackApi,
+  deployment: deploymentApi,
 };
