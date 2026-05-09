@@ -49,6 +49,16 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Render runs preDeployCommand once after a successful image build but
+    # before the new instance accepts traffic. We use it to (a) apply
+    # alembic migrations on every deploy and (b) idempotently re-seed the
+    # 15-incident demo dataset including the in-flight INC-RT-001 ransomware
+    # investigation that the web app's "Try the demo" CTA links to. The
+    # seeder is safe to run on every deploy — it short-circuits if the
+    # canonical case_numbers already exist. Without this hook the demo
+    # would land on an empty dashboard and break the < 5 min clone-to-
+    # investigation acceptance criterion.
+    preDeployCommand: alembic upgrade head && python -m app.scripts.seed_demo
     envVars:
       - key: ENVIRONMENT
         value: demo
@@ -203,13 +213,29 @@ services:
           name: aisoc-realtime
           property: host
       # Demo banner — same flags the Fly demo uses, surfaced via
-      # apps/web/src/lib/demoMode.ts.
-      - key: NEXT_PUBLIC_AISOC_DEMO_MODE
+      # apps/web/src/lib/demoMode.ts. The variable names here MUST match
+      # the ones that module reads (NEXT_PUBLIC_DEMO_*, no AISOC infix);
+      # the previous NEXT_PUBLIC_AISOC_DEMO_* form was a typo that left
+      # demo mode silently disabled on Render.
+      - key: NEXT_PUBLIC_DEMO_MODE
         value: "true"
-      - key: NEXT_PUBLIC_AISOC_DEMO_DEEPLINK
-        value: /cases/INC-001?tab=ledger
-      - key: NEXT_PUBLIC_AISOC_DEMO_BANNER
-        value: "Demo data resets daily. All write actions are disabled."
+      # Land "Try the demo" visitors on the in-flight LockBit 3.0 ransomware
+      # investigation seeded by services/api/app/scripts/seed_demo.py.
+      # INC-RT-001 is the showcase scenario — encryption is already in
+      # progress and the agent is streaming live decisions to the ledger.
+      - key: NEXT_PUBLIC_DEMO_DEEPLINK
+        value: /cases/INC-RT-001?tab=ledger
+      - key: NEXT_PUBLIC_DEMO_BANNER
+        value: "Demo data resets daily at 00:00 UTC. All write actions are disabled."
+      # One-click auto-login for the read-only demo analyst account. The
+      # seeder creates this user as part of the demo tenant; values must
+      # stay in sync with services/api/app/scripts/seed_demo.py (which
+      # sources DEMO_USER_EMAIL from app/api/v1/dev_auth.py and sets the
+      # password to "aisoc-demo" via get_password_hash).
+      - key: NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL
+        value: demo@aisoc.dev
+      - key: NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD
+        value: aisoc-demo
 
   # ─── redis ────────────────────────────────────────────────────────────
   # Render's managed Redis. Used as cache + pub/sub spine when Kafka is

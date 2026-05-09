@@ -211,6 +211,37 @@ services:
       - aisoc-demo
     restart: unless-stopped
 
+  # ─── One-shot demo seeder ───────────────────────────────────────────────────
+  # Runs `python -m app.scripts.seed_demo` once when the api is healthy, then
+  # exits cleanly. The seeder is idempotent (it checks for existing INC-RT-*
+  # case_numbers before inserting), so repeated `docker compose up -d` runs
+  # don't double-seed. `restart: "no"` makes compose treat the clean exit as
+  # success and stop trying to bring it back. The orchestrator script
+  # (scripts/aisoc-demo.ts) waits for this container to terminate before
+  # reading /v1/cases — that's how we get a deterministic INC-RT-001 in the
+  # API on first browser load.
+  seed:
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
+    build:
+      context: ./services/api
+    container_name: aisoc-demo-seed
+    pull_policy: missing
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/0
+      SECRET_KEY: dev_secret_key_change_in_production
+      ENV: development
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      AISOC_DISABLE_KAFKA: "true"
+    networks:
+      - aisoc-demo
+    restart: "no"
+    command: ["python", "-m", "app.scripts.seed_demo"]
+
   web:
     image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-latest}
     # Build context for `pnpm aisoc:demo --rebuild`. The Dockerfile bakes the

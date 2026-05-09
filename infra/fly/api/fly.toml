@@ -22,6 +22,22 @@ kill_timeout   = "5s"
 # deploy script cd's into services/api/ before invoking `flyctl deploy`, so
 # the right Dockerfile gets picked up automatically.
 
+# Run alembic migrations and re-seed the demo dataset on every deploy.
+# The release_command runs in a temporary VM with all production env vars
+# (Postgres URL, Redis URL, secrets) before any app machine accepts traffic,
+# which is exactly what we want for demo-tenant data lifecycle:
+#   1. `alembic upgrade head` keeps the schema in step with the image.
+#   2. `python -m app.scripts.seed_demo` is idempotent — it short-circuits
+#      when the canonical INC-RT-* case_numbers already exist, so it's safe
+#      to run on every deploy. First-run boot creates all 15 incidents
+#      including the in-flight LockBit 3.0 ransomware investigation
+#      (INC-RT-001) that the web app's "Try the demo" CTA deeplinks to.
+# Without this, hitting / on a freshly cloned Render or Fly deploy lands
+# users on an empty dashboard and breaks the < 5 min clone-to-investigation
+# acceptance criterion in the v1.0 plan.
+[deploy]
+  release_command = "/bin/sh -c 'alembic upgrade head && python -m app.scripts.seed_demo'"
+
 [env]
   ENVIRONMENT      = "demo"
   LOG_LEVEL        = "info"
@@ -36,10 +52,12 @@ kill_timeout   = "5s"
   AISOC_DISABLE_OPENSEARCH = "true"
   AISOC_DISABLE_NEO4J      = "true"
   AISOC_DISABLE_QDRANT     = "true"
-  # The demo_seed entrypoint runs inside this container (post-deploy via
-  # `flyctl ssh console -C "python -m app.scripts.demo_seed …"` and via a
-  # daily cron machine). It needs to reach the API locally and the agents
-  # app over Fly's internal 6PN DNS.
+  # Seeding runs automatically on deploy via [deploy].release_command above.
+  # A daily cron machine (provisioned separately) re-runs the same seeder
+  # to refresh demo-tenant data at 00:00 UTC. CORE_API_URL points at
+  # localhost so investigation kickoffs from the seeder hit the in-process
+  # API, and AGENTS_API_URL crosses to the agents app over Fly's internal
+  # 6PN DNS (.internal:port).
   CORE_API_URL    = "http://localhost:8000"
   AGENTS_API_URL  = "http://aisoc-demo-agents.internal:8084"
   # Cross-origin allowlist for the browser. The Next.js app at tryaisoc.com
