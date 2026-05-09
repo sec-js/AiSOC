@@ -786,17 +786,19 @@ async def update_connector_capabilities(
     await db.commit()
     await db.refresh(connector)
 
+    # Audit log: only emit fields with provably bounded shape.
+    # ``request.allowed_capabilities`` is a list of caller-supplied strings
+    # and would otherwise carry taint into the log record (CodeQL
+    # py/log-injection). The capability *count* is sufficient for ops
+    # forensics — the full set is already persisted on the row above and
+    # can be recovered from the DB, which is the source of truth anyway.
     logger.info(
         "connector.capabilities.updated",
         extra={
             "tenant_id": current_user.tenant_id,
             "connector_id": str(connector_id),
-            # _safe_connector_type reconstructs from a whitelist regex
-            # (negative-class sub) — that's a taint-breaker CodeQL
-            # actually recognises, unlike _safe_log_val's strip-only
-            # cleanup which it (correctly) treats as cosmetic.
             "connector_type": _safe_connector_type(connector.connector_type),
-            "allowed": request.allowed_capabilities,
+            "allowed_count": len(request.allowed_capabilities),
         },
     )
 
@@ -1111,14 +1113,19 @@ async def troubleshoot_connection(
             detail="connector_type contains invalid characters",
         )
     safe_type = _safe_connector_type(request.connector_type)
+    # Diagnostics log: caller-supplied ``request.auth_config_keys`` is a
+    # list of arbitrary strings and would carry taint into the log
+    # record (CodeQL py/log-injection). For triage we only need the
+    # *count* — the actual key names on a misconfigured connector are
+    # available via the schema endpoint and don't add forensic value
+    # here. ``safe_type`` is already reconstructed via
+    # ``_safe_connector_type`` (whitelist regex) so it's a recognised
+    # taint break. ``err_len`` is an int, not a string.
     logger.info(
         "connectors.troubleshoot",
         extra={
-            # safe_type is already taint-broken by _safe_connector_type
-            # above; wrapping it in _safe_log_val just re-introduced a
-            # function CodeQL doesn't model as a sanitizer.
             "type": safe_type,
-            "keys": sorted(request.auth_config_keys)[:8],  # cap to avoid log spam
+            "keys_count": len(request.auth_config_keys),
             "err_len": len(request.error),
         },
     )

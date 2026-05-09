@@ -65,7 +65,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse, urlsplit, urlunsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -294,17 +294,66 @@ def _validate_return_to(return_to: str | None) -> str:
     only:
       * Pure paths starting with ``/`` (e.g. ``/onboarding``).
       * Absolute URLs whose origin matches ``CONSOLE_PUBLIC_BASE_URL``.
+
+    Every accepted branch *reconstructs* the URL from validated
+    components via ``urlunsplit`` + ``quote`` rather than returning
+    the caller's string verbatim. That's the canonical taint break
+    CodeQL recognises for ``py/url-redirection`` — it cannot reason
+    about ``startswith`` allowlists alone, but it does know that
+    rebuilding a URL from individually-quoted parts removes the
+    open-redirect class entirely.
     """
     default = "/onboarding"
     if not return_to:
         return default
-    if return_to.startswith("/") and not return_to.startswith("//"):
-        return return_to
+
+    parsed = urlsplit(return_to)
+    # Path-only (relative) navigation inside the console.
+    if (
+        not parsed.scheme
+        and not parsed.netloc
+        and parsed.path.startswith("/")
+        and not parsed.path.startswith("//")
+    ):
+        # ``safe`` keeps URL-meaningful chars; everything else gets
+        # percent-encoded, which both hardens the value and gives
+        # CodeQL a sanitizer it tracks.
+        safe_path = quote(parsed.path, safe="/-._~")
+        safe_query = quote(parsed.query, safe="=&-._~")
+        safe_fragment = quote(parsed.fragment, safe="-._~")
+        return urlunsplit(("", "", safe_path, safe_query, safe_fragment))
+
     base = _resolve_console_base()
-    if base and return_to.startswith(base + "/"):
-        return return_to
-    if base and return_to == base:
-        return return_to
+    if base:
+        base_parsed = urlsplit(base)
+        # Same-origin absolute URL: rebuild from the base scheme/host
+        # we trust, plus the path/query/fragment of the input — never
+        # echo the raw string. The host check below also guarantees
+        # the origin matches before we reconstruct.
+        if (
+            parsed.scheme == base_parsed.scheme
+            and parsed.netloc == base_parsed.netloc
+            and (
+                parsed.path == ""
+                or (
+                    parsed.path.startswith("/")
+                    and not parsed.path.startswith("//")
+                )
+            )
+        ):
+            safe_path = quote(parsed.path or "/", safe="/-._~")
+            safe_query = quote(parsed.query, safe="=&-._~")
+            safe_fragment = quote(parsed.fragment, safe="-._~")
+            return urlunsplit(
+                (
+                    base_parsed.scheme,
+                    base_parsed.netloc,
+                    safe_path,
+                    safe_query,
+                    safe_fragment,
+                )
+            )
+
     logger.info(
         "oauth.return_to.rejected",
         extra={
