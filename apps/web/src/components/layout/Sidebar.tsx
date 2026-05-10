@@ -116,6 +116,12 @@ const MarketplaceIcon = () => (
   </svg>
 );
 
+const DocumentReportIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17.25v-3.75M12 17.25V9.75M15 17.25v-1.5M19.5 19.5h-15A2.25 2.25 0 012.25 17.25V6.75A2.25 2.25 0 014.5 4.5h15a2.25 2.25 0 012.25 2.25v10.5a2.25 2.25 0 01-2.25 2.25z" />
+  </svg>
+);
+
 const navSections: NavSection[] = [
   {
     items: [
@@ -270,6 +276,11 @@ const navSections: NavSection[] = [
         label: 'SLA Tracking',
         href: '/sla',
         icon: <ChartBarIcon />,
+      },
+      {
+        label: 'Executive Digest',
+        href: '/reports/digest',
+        icon: <DocumentReportIcon />,
       },
       {
         label: 'Audit Log',

@@ -3132,6 +3132,149 @@ export const deploymentApi = {
   getLlmStatus: () => request<LlmStatus>('/api/v1/llm/status'),
 };
 
+// ─── Reports / Executive digest (WS-G2) ─────────────────────────────────────
+
+export interface DigestPeriod {
+  start: string;
+  end: string;
+  label: string;
+}
+
+export interface SeveritySplit {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+export interface AlertSummary {
+  total: number;
+  new: number;
+  resolved: number;
+  open_at_period_end: number;
+  severity: SeveritySplit;
+}
+
+export interface CaseSummary {
+  opened: number;
+  closed: number;
+  open_at_period_end: number;
+  sla_breached: number;
+}
+
+export interface MttSummary {
+  mttd_hours: number | null;
+  mttr_hours: number | null;
+  mttc_hours: number | null;
+}
+
+export interface TacticHighlight {
+  tactic: string;
+  count: number;
+  delta_from_prior: number;
+}
+
+export interface TopSourceHighlight {
+  connector_type: string;
+  count: number;
+}
+
+export interface HighRiskAlertHighlight {
+  alert_id: string;
+  title: string;
+  severity: string;
+  ai_score: number | null;
+  mitre_tactics: string[];
+  event_time: string;
+}
+
+export interface AutomationSummary {
+  total_decisions: number;
+  auto_executed: number;
+  escalated: number;
+  review_pending: number;
+}
+
+export interface DigestRecommendation {
+  severity: 'info' | 'warning' | 'critical' | string;
+  title: string;
+  body: string;
+}
+
+export interface ExecutiveDigest {
+  tenant_id: string;
+  period: DigestPeriod;
+  headline: string;
+  alerts: AlertSummary;
+  cases: CaseSummary;
+  mtt: MttSummary;
+  top_tactics: TacticHighlight[];
+  top_sources: TopSourceHighlight[];
+  high_risk_alerts: HighRiskAlertHighlight[];
+  automation: AutomationSummary;
+  recommendations: DigestRecommendation[];
+}
+
+export interface WeeklyDigestParams {
+  /** ISO timestamp for the start of the window. Defaults to now-7d on the API. */
+  period_start?: string;
+  /** ISO timestamp for the end of the window. Defaults to now on the API. */
+  period_end?: string;
+}
+
+export const reportsApi = {
+  /**
+   * Fetch the executive weekly digest for the current tenant as structured
+   * JSON suitable for rendering an interactive panel in the web UI.
+   */
+  weeklyDigest: (params: WeeklyDigestParams = {}) =>
+    request<ExecutiveDigest>('/api/v1/reports/digest/weekly', {
+      params: { format: 'json', ...params },
+    }),
+
+  /**
+   * Fetch the print-ready HTML representation of the weekly digest as a string.
+   * Pairs naturally with `URL.createObjectURL(new Blob([html], …))` so the UI
+   * can pop a new tab and let the browser's native "Save as PDF" produce the
+   * board-ready document — no server-side PDF dependency required.
+   *
+   * Goes through the shared `request()` plumbing so it inherits the same auth
+   * (cookie + optional localStorage bearer) and tenant header treatment as the
+   * JSON variant.
+   */
+  weeklyDigestHtml: async (params: WeeklyDigestParams = {}): Promise<string> => {
+    const search = new URLSearchParams({ format: 'html' });
+    if (params.period_start) search.set('period_start', params.period_start);
+    if (params.period_end) search.set('period_end', params.period_end);
+
+    const headers: Record<string, string> = {
+      Accept: 'text/html',
+      'X-Tenant-Id': TENANT_ID,
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        /* localStorage unavailable; ignore */
+      }
+    }
+
+    const url = `${API_BASE}/api/v1/reports/digest/weekly?${search.toString()}`;
+    const response = await fetch(url, { headers, cache: 'no-store' });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /reports/digest/weekly`,
+        response.status,
+        detail,
+      );
+    }
+    return response.text();
+  },
+};
+
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────
 
 export const realtimeApi = {
@@ -3175,4 +3318,5 @@ export default {
   autonomyPolicy: autonomyPolicyApi,
   feedback: feedbackApi,
   deployment: deploymentApi,
+  reports: reportsApi,
 };

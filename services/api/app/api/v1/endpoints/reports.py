@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,8 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.report import ReportArtefact, ReportTemplate
 from app.models.tenant import User
+from app.services.digest_html import render_digest_html
+from app.services.executive_digest import ExecutiveDigest, build_weekly_digest
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -192,3 +195,48 @@ async def get_artefact(
     if not art or art.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Artefact not found")
     return art
+
+
+# ---------------------------------------------------------------------------
+# Executive weekly digest (WS-G2)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/digest/weekly",
+    summary="Executive weekly digest (JSON or print-ready HTML)",
+    # The endpoint returns either an ExecutiveDigest (JSON) or an HTMLResponse
+    # depending on the ?format= query param. FastAPI cannot synthesise a
+    # response_model from that union, so we opt out and let each branch
+    # serialise itself (Pydantic for JSON, HTMLResponse for HTML).
+    response_model=None,
+)
+async def weekly_digest(
+    fmt: str = Query("json", alias="format", pattern="^(json|html)$"),
+    period_start: datetime | None = Query(None, description="ISO timestamp; defaults to now-7d"),
+    period_end: datetime | None = Query(None, description="ISO timestamp; defaults to now"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ExecutiveDigest | HTMLResponse:
+    """Build a deterministic weekly digest for the caller's tenant.
+
+    The default window is the most recent seven days. Pass ``format=html`` to
+    receive a self-contained, print-ready document (use the browser's
+    "Save as PDF" to export).
+    """
+    if period_start and period_end and period_start >= period_end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="period_start must be earlier than period_end",
+        )
+
+    digest = await build_weekly_digest(
+        db,
+        current_user.tenant_id,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    if fmt == "html":
+        return HTMLResponse(content=render_digest_html(digest))
+    return digest
