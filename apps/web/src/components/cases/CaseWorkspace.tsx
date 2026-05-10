@@ -477,6 +477,23 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   const [newComment, setNewComment] = useState('');
   const [newTask, setNewTask] = useState('');
   const [statusUpdating, setStatusUpdating] = useState(false);
+  // WS-D2 — track summary-download state so the button can show "Generating…"
+  // and we can surface failures via toast without burying them in the console.
+  const [summaryDownloading, setSummaryDownloading] = useState(false);
+
+  const downloadSummary = useCallback(async () => {
+    if (!caseRecord || summaryDownloading) return;
+    setSummaryDownloading(true);
+    try {
+      await casesApi.openAutoSummaryHtml(caseRecord.id || caseId);
+      toast.success('Summary opened — use Print → Save as PDF to archive');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Backend offline';
+      toast.error(`Summary unavailable: ${message}`);
+    } finally {
+      setSummaryDownloading(false);
+    }
+  }, [caseRecord, caseId, summaryDownloading]);
 
   const updateStatus = async (status: CaseStatus) => {
     if (!caseRecord) return;
@@ -686,6 +703,32 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                 <span className="h-3 w-3 animate-spin rounded-full border border-emerald-500/30 border-t-emerald-400" />
               )}
               {investigating ? 'Investigating…' : 'Investigate with agent'}
+            </button>
+            {/*
+              WS-D2 — deterministic, analyst-ready snapshot of the entire case
+              (lifecycle, MITRE coverage, observables, evidence, timeline,
+              recommendations). Backed by `GET /cases/{id}/summary?format=html`
+              which renders a self-contained, print-ready HTML document the
+              analyst can save as PDF for compliance / handoff. Available on
+              every case so analysts can grab a snapshot any time, but the
+              backend also auto-emits a system breadcrumb when status flips to
+              resolved/closed.
+            */}
+            <button
+              onClick={() => void downloadSummary()}
+              disabled={summaryDownloading || !caseRecord}
+              className={clsx(
+                'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors',
+                summaryDownloading || !caseRecord
+                  ? 'cursor-not-allowed border-slate-700/40 bg-slate-800/40 text-slate-500'
+                  : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20',
+              )}
+              title="Open a print-ready case summary (HTML → Save as PDF)"
+            >
+              {summaryDownloading && (
+                <span className="h-3 w-3 animate-spin rounded-full border border-indigo-500/30 border-t-indigo-400" />
+              )}
+              {summaryDownloading ? 'Generating…' : 'Summary'}
             </button>
           </div>
         </div>

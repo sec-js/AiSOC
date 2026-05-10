@@ -29,6 +29,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -39,6 +40,8 @@ from app.services.case_fanout import (
     fanout_create_case,
     fanout_status_change,
 )
+from app.services.case_summary import build_case_summary
+from app.services.case_summary_html import render_case_summary_html
 
 logger = logging.getLogger(__name__)
 
@@ -549,6 +552,19 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
             await db.rollback()
             response.fanout_results = []
 
+        # WS-D2 — when a case enters its terminal lifecycle stages, drop a
+        # system note pointing to the auto-summary artifact. The summary
+        # itself is generated on-demand by GET /cases/{id}/summary, so this
+        # is a cheap, idempotent breadcrumb rather than a heavy precompute.
+        if body.status in {"resolved", "closed"}:
+            try:
+                await _emit_summary_breadcrumb(db, case_id=row.id, status=body.status)
+            except Exception:  # pragma: no cover — defensive: never block status change.
+                logger.exception(
+                    "cases.update.summary_breadcrumb_failed case=%s", row.id
+                )
+                await db.rollback()
+
     return response
 
 
@@ -1021,6 +1037,84 @@ _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]")
 def _safe_filename_segment(value: str) -> str:
     """Reduce an identifier to a Content-Disposition-safe filename segment."""
     return _SAFE_FILENAME_RE.sub("_", value)[:64] or "unknown"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# WS-D2 — auto-summary artifact at investigation close.
+# ────────────────────────────────────────────────────────────────────────────
+
+# We keep the breadcrumb body in one place so the system note stays uniform
+# across deployments — easier to grep, easier to redact in CI exports.
+_SUMMARY_BREADCRUMB_BODY = (
+    "Case auto-summary generated. Download from "
+    "/api/v1/cases/{case_id}/summary?format=html "
+    "(or ?format=json for the structured payload). "
+    "Print the HTML page (Ctrl/Cmd-P → Save as PDF) for case-file archival."
+)
+
+
+async def _emit_summary_breadcrumb(
+    db: Any, *, case_id: uuid.UUID, status: str
+) -> None:
+    """Drop a system comment pointing to the on-demand summary endpoint.
+
+    Idempotent on repeated status changes — we re-emit only when transitioning
+    *into* a terminal state, never on noop updates. The body intentionally
+    avoids embedding tenant-specific URLs so the artifact link still works
+    behind reverse proxies that rewrite the host.
+    """
+    body = _SUMMARY_BREADCRUMB_BODY.format(case_id=case_id) + f" (status={status})"
+    await db.execute(
+        text(
+            """
+            INSERT INTO aisoc_case_comments
+                (id, case_id, author, body, is_system, created_at)
+            VALUES (:id, :case_id, :author, :body, true, :now)
+            """
+        ).bindparams(
+            id=uuid.uuid4(),
+            case_id=case_id,
+            author="aisoc",
+            body=body,
+            now=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+
+
+@router.get(
+    "/{case_id}/summary",
+    summary="Download the per-case auto-summary (JSON or HTML)",
+    response_model=None,
+)
+async def case_auto_summary(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+    format: Literal["json", "html"] = Query(
+        "json",
+        description=(
+            "Response format. ``json`` returns the structured CaseAutoSummary; "
+            "``html`` returns a print-ready report (use the browser's "
+            "Save-as-PDF affordance for archival)."
+        ),
+    ),
+) -> Any:
+    cid = await _resolve_case_id(case_id, db)
+    summary = await build_case_summary(db, cid)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    if format == "html":
+        rendered = render_case_summary_html(summary)
+        case_label = summary.case.case_number or str(summary.case.case_id)[:8]
+        filename = _safe_filename_segment(f"case-{case_label}-summary") + ".html"
+        return HTMLResponse(
+            content=rendered,
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+
+    return summary
 
 
 @router.get(

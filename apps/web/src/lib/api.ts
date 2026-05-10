@@ -603,6 +603,97 @@ export interface CasesResponse {
   pageSize: number;
 }
 
+// ─── WS-D2 — Per-case auto-summary artifact ─────────────────────────────────
+//
+// Mirrors the Pydantic schemas in ``services/api/app/services/case_summary.py``.
+// We keep these as a flat block of ``snake_case`` interfaces (matching the
+// JSON over the wire) so consumers don't pay a transformation cost — the
+// backend is the source of truth for shape, the UI just renders.
+export interface CaseSummaryHeader {
+  case_id: string;
+  case_number: string | null;
+  title: string;
+  description: string | null;
+  severity: string;
+  status: string;
+  assignee: string | null;
+  created_by: string | null;
+  tags: Record<string, unknown>;
+}
+
+export interface CaseLifecycleTimings {
+  opened_at: string;
+  triaged_at: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  sla_due_at: string | null;
+  time_to_triage_hours: number | null;
+  time_to_resolve_hours: number | null;
+  time_to_close_hours: number | null;
+  sla_breached: boolean;
+}
+
+export interface CaseSummaryTaskBreakdown {
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  overdue: number;
+}
+
+export interface CaseSummaryCommentBreakdown {
+  total: number;
+  analyst: number;
+  system: number;
+  distinct_authors: string[];
+}
+
+export interface CaseSummaryCoverage {
+  mitre_techniques: string[];
+  mitre_tactic_buckets: Record<string, number>;
+  compliance_frameworks: string[];
+}
+
+export interface CaseSummaryObservables {
+  total_nodes: number;
+  total_edges: number;
+  node_kind_counts: Record<string, number>;
+  distinct_kinds: string[];
+}
+
+export interface CaseSummaryEvidence {
+  total_items: number;
+  distinct_kinds: string[];
+}
+
+export interface CaseSummaryTimelineEntry {
+  ts: string;
+  kind: string; // "case" | "comment" | "task"
+  label: string;
+  detail: string | null;
+}
+
+export interface CaseSummaryRecommendation {
+  severity: string; // "info" | "warning" | "critical"
+  title: string;
+  body: string;
+}
+
+export interface CaseAutoSummary {
+  generated_at: string;
+  headline: string;
+  case: CaseSummaryHeader;
+  lifecycle: CaseLifecycleTimings;
+  coverage: CaseSummaryCoverage;
+  alerts: { count?: number; ids?: string[] } & Record<string, unknown>;
+  observables: CaseSummaryObservables;
+  evidence: CaseSummaryEvidence;
+  tasks: CaseSummaryTaskBreakdown;
+  comments: CaseSummaryCommentBreakdown;
+  timeline: CaseSummaryTimelineEntry[];
+  recommendations: CaseSummaryRecommendation[];
+}
+
 export interface CaseFilters {
   status?: string;
   priority?: string;
@@ -843,6 +934,64 @@ export const casesApi = {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  },
+
+  // WS-D2 — auto-summary at investigation close.
+  // The backend renders both the structured payload (json) and a print-ready
+  // page (html). We expose JSON for callers that want to drive their own UI
+  // (e.g. an inline drawer) and an "open in new tab" helper for the HTML
+  // artifact so operators can Cmd/Ctrl-P → Save as PDF for case-file archival.
+  /** Fetch the structured per-case auto-summary payload. */
+  getAutoSummary: (caseId: string) =>
+    request<CaseAutoSummary>(`/api/v1/cases/${caseId}/summary`, {
+      params: { format: 'json' },
+    }),
+
+  /**
+   * Open the per-case auto-summary HTML artifact in a new tab.
+   *
+   * We deliberately fetch with the auth headers (instead of a plain
+   * ``window.open(url)``) because the backend requires the bearer token and
+   * tenant header — direct anchor navigation would drop them and 401.
+   * Mirrors the WS-G2 ``reportsApi.weeklyDigestHtml`` pattern so both
+   * report surfaces behave consistently in the PWA.
+   */
+  openAutoSummaryHtml: async (caseId: string): Promise<void> => {
+    const headers: Record<string, string> = {
+      Accept: 'text/html',
+      'X-Tenant-Id': TENANT_ID,
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        /* localStorage unavailable; ignore */
+      }
+    }
+
+    const url = `${API_BASE}/api/v1/cases/${caseId}/summary?format=html`;
+    const response = await fetch(url, { headers, cache: 'no-store' });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /cases/${caseId}/summary`,
+        response.status,
+        detail,
+      );
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    // Use a transient anchor so the print-ready page lands in its own tab.
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Hold the blob URL long enough for the new tab to read it, then release.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   },
 };
 
