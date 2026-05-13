@@ -1178,6 +1178,7 @@ export interface DashboardMetrics {
     high: number;
     medium: number;
     low: number;
+    info?: number;
     resolvedToday: number;
     mttr: number;
   };

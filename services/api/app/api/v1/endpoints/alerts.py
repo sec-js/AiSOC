@@ -30,6 +30,13 @@ class AlertResponse(BaseModel):
     ai_score: float | None
     ai_summary: str | None
     ai_recommendations: list
+    # Fusion confidence (W3). `confidence` is an integer 0-100; the band is
+    # carried in `confidence_label` (high/medium/low) and the contributing
+    # factors in `confidence_rationale`. All three can be NULL for legacy
+    # alerts created before the fusion service emitted confidence.
+    confidence: int | None = None
+    confidence_label: str | None = None
+    confidence_rationale: list | None = None
     disposition: str | None = None
     affected_ips: list
     affected_hosts: list
@@ -90,8 +97,17 @@ async def list_alerts(
     category: str | None = Query(default=None),
     assigned_to_me: bool = Query(default=False),
     search: str | None = Query(default=None),
+    min_confidence: int | None = Query(default=None, ge=0, le=100),
+    confidence_label: str | None = Query(default=None),
 ) -> AlertListResponse:
-    """List alerts for the current tenant with filtering and pagination."""
+    """List alerts for the current tenant with filtering and pagination.
+
+    `min_confidence` / `confidence_label` let the queue workbench (PR-5) and
+    /alerts page filter on the fusion-emitted confidence signal (W3). Alerts
+    that pre-date the confidence column will have NULL and therefore won't
+    match either filter — that's intentional; analysts who care about
+    confidence should only see alerts that actually carry the signal.
+    """
     filters = [Alert.tenant_id == current_user.tenant_id]
 
     if severity:
@@ -102,6 +118,17 @@ async def list_alerts(
         filters.append(Alert.category == category)
     if assigned_to_me:
         filters.append(Alert.assigned_to_id == current_user.user_id)
+    if min_confidence is not None:
+        filters.append(Alert.confidence >= min_confidence)
+    if confidence_label is not None:
+        if confidence_label not in {"high", "medium", "low"}:
+            # NOTE: the local `status` query parameter shadows the
+            # `fastapi.status` module here, so use the literal 400.
+            raise HTTPException(
+                status_code=400,
+                detail="confidence_label must be one of: high, medium, low",
+            )
+        filters.append(Alert.confidence_label == confidence_label)
 
     # Count
     count_result = await db.execute(select(func.count()).select_from(Alert).where(and_(*filters)))
