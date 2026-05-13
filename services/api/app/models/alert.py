@@ -45,6 +45,16 @@ class Alert(Base):
     ai_recommendations: Mapped[list] = mapped_column(JSONB, default=list)
     false_positive_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Fusion confidence — populated by services/fusion at correlate-time.
+    # `confidence` is the canonical 0-100 integer the API surfaces (W3 in
+    # the v1.5 SOC Console Parity plan); `confidence_label` is the band
+    # ('high' | 'medium' | 'low') and `confidence_rationale` is the list
+    # of contributing factors so analysts can see why we believe what we
+    # believe.
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_label: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    confidence_rationale: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)

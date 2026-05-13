@@ -26,7 +26,10 @@ from app.services import sla as sla_service
 
 router = APIRouter(prefix="/sla", tags=["sla"])
 
-VALID_SEVERITIES = {"critical", "high", "medium", "low"}
+# Five-tier severity ladder (matches `tenant_sla_config.severity` CHECK
+# constraint installed by migration 040 and the AGENTS.md project-wide
+# convention `info | low | medium | high | critical`).
+VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 VALID_EVENT_TYPES = {"detected", "acknowledged", "resolved", "closed"}
 
 

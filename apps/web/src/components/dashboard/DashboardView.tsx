@@ -391,6 +391,7 @@ export function DashboardView() {
     { name: 'High', value: metrics.alerts.high, color: '#f97316' },
     { name: 'Medium', value: metrics.alerts.medium, color: '#eab308' },
     { name: 'Low', value: metrics.alerts.low, color: '#3b82f6' },
+    { name: 'Info', value: metrics.alerts.info ?? 0, color: '#64748b' },
   ];
 
   // WS-F3: drag-and-drop widget reordering
