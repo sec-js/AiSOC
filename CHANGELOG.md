@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Alerts console — Investigation Rail & correlation narrative (v1.5 W6 / PR-4)
+
+The `/alerts` queue is now a two-pane workbench: the existing queue on the left and an **Investigation Rail** on the right. Selecting a row hydrates narrative, related entities (with pivot links), a six-event mini-timeline, and structured recommended actions — no drawer hop for first-pass triage.
+
+- **`services/fusion`** — `fusion_engine` emits a deterministic **correlation narrative** at fuse time; `narrative.py` mirrors the vendored builder shared with the API.
+- **`services/api`** — `alert_rail.py` builds the rail payload; `narrative_projection.py` + `narrative_loader.py` back-fill legacy alerts on first `GET /api/v1/alerts/{id}`; migration `041_alert_correlation_narrative.sql` stores cached narrative on the alert row; OpenAPI + tests extended for the detail envelope.
+- **`apps/web`** — `InvestigationRail.tsx` + `AlertsView.tsx` integration; Vitest coverage in `InvestigationRail.test.tsx`.
+- **`apps/docs/docs/console/investigation-rail.md`** — operator/analyst guide; sidebar entry under Console.
+- **`scripts/sync_vendored_narrative.py`** — keeps `services/api/app/_vendor/narrative.py` aligned with fusion.
+
 ### Connectors — Wazuh Indexer ingest (Stage 2)
 
 New first-class endpoint connector for Wazuh deployments. AiSOC now polls the

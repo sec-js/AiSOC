@@ -349,15 +349,17 @@ flowchart LR
     MCP --> API
 ```
 
+**v1.5 console:** On `/alerts/[id]`, the **Investigation Rail** surfaces fusion correlation narrative, evidence chips, and Deep Explain (LLM) with audit logging. See [Investigation Rail](apps/docs/docs/console/investigation-rail.md) in the docs site.
+
 ### Service map
 
 | Service | Lang | Port | Role |
 |---|---|---|---|
-| `web` | Next.js 14 + React | 3000 | SOC console, benchmark scoreboard, marketing landing |
-| `api` | Python · FastAPI | 8000 | Alerts, cases, RBAC, graph, rules, audit, compliance, detection proposals (DAC), federated search fan-out, SLA tracking |
+| `web` | Next.js 14 + React | 3000 | SOC console (alerts detail + Investigation Rail), benchmark scoreboard, marketing landing |
+| `api` | Python · FastAPI | 8000 | Alerts (detail envelope + correlation narrative), cases, RBAC, graph, rules, audit, compliance, detection proposals (DAC), federated search fan-out, SLA tracking |
 | `realtime` | Node.js · `ws` | 8086 | Per-channel WebSocket fan-out + VAPID Web Push |
 | `agents` | Python · LangGraph | 8001 | Multi-agent reasoning + Qdrant RAG + Hunt-as-Code engine & scheduler |
-| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest), alert confidence, entity risk / RBA |
+| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest), alert confidence, entity risk / RBA, correlation narrative projection for API |
 | `actions` | Python | 8002 | SOAR with blast-radius gating + ChatOps verification |
 | `connectors` | Python | — | Connector polling (APScheduler), credential vault, federated query translators |
 | `threatintel` | Python | 8005 | TAXII / MISP / OTX / KEV polling |
@@ -756,7 +758,7 @@ The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](docs/openapi.yaml). End
 | Tag | Prefix | Notes |
 |---|---|---|
 | `auth` | `/api/v1/auth/` | JWT login, SAML ACS, OIDC callback |
-| `alerts` | `/api/v1/alerts/` | CRUD, bulk status, timeline |
+| `alerts` | `/api/v1/alerts/` | CRUD, bulk status, timeline, detail envelope (`investigation_rail`, `correlation_narrative`, `deep_explain`) |
 | `cases` | `/api/v1/cases/` | Create, link alerts, evidence |
 | `rules` | `/api/v1/rules/` | Sigma / YARA / KQL CRUD + test |
 | `detections` | `/api/v1/detections/` | Catalog browse + install |

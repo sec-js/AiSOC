@@ -73,7 +73,8 @@ The v1.5 release ships from a review of G2, Gartner Peer Insights, and customer 
 - **Shift handoff dashboard** — `/shifts` shows outgoing/incoming analysts the active cases, in-flight investigations, and queued approvals on one screen. Endpoints in `services/api/app/api/v1/endpoints/shifts.py`.
 - **EASM (External Attack Surface Management)** — `/easm` discovers assets, exposed services, and certificate-expiry risks for everything the org points at the public internet.
 - **MSSP executive dashboard** — `/mssp` rolls up KPIs, cross-tenant alert volumes, and per-customer SLA posture into a multi-tenant pane.
-- **Alert noise-tuning dashboard** — `/noise-tuning` surfaces per-rule false-positive rate, suppression candidates, and one-click tuning.
+- **Investigation Rail on `/alerts`** — two-pane alert queue: selecting a row opens a right-hand rail with **deterministic correlation narrative** (fusion-time, no LLM on read), **related entities** with pivot links, a **mini-timeline** (case + audit, six events), and **recommended actions**. `GET /api/v1/alerts/{id}` returns a structured envelope; legacy rows lazy back-fill narrative on first read. See [Investigation Rail](./console/investigation-rail).
+- **Alert noise-tuning dashboard** — `/noise-tuning` (and `/detection/tuning` where deployed) surfaces per-rule false-positive rate, suppression candidates, and one-click tuning.
 - **Team analytics & gamification** — `/analytics/team` ships analyst leaderboard, MTTR per analyst, dispositions accuracy, and shift workload balance.
 - **STIX 2.1 / TAXII 2.1 publishing** — `services/api/app/api/v1/endpoints/stix_taxii.py` pushes the tenant's IOCs and threat-actor profiles to upstream / community feeds.
 - **Automated compliance evidence** — `services/api/app/api/v1/endpoints/compliance.py` collects point-in-time evidence for SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA.
@@ -184,12 +185,12 @@ AiSOC/
 
 | Service | Port | Language | Responsibility |
 |---------|------|----------|----------------|
-| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions, **Detection Proposals** (DAC lifecycle), **Federated Search** fan-out, SLA tracking, **Shifts** handoff, **STIX/TAXII** publishing, **Compliance evidence** collection, **Deployment / air-gap** configuration |
+| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, **alert detail envelope** (Investigation Rail: narrative, entities, mini-timeline, actions), Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions, **Detection Proposals** (DAC lifecycle), **Federated Search** fan-out, SLA tracking, **Shifts** handoff, **STIX/TAXII** publishing, **Compliance evidence** collection, **Deployment / air-gap** configuration |
 | `agents` | 8001 | Python (LangGraph) | Orchestrator + recon + forensic + responder + report-writer agents, **autonomous triage agent** + phishing / identity / cloud / insider-threat sub-agents, **conversational investigation chat**, playbook engine, ledger writes, **Hunt-as-Code** engine + scheduler |
 | `realtime` | 8086 | TypeScript (Node.js) | WebSocket streaming of agent steps; **VAPID Web Push** delivery for the Responder PWA |
 | `ingest` | 8081 | Go | OCSF normalisation, Bloom-filter dedup, Kafka publish |
 | `enrichment` | 8080 | Go | Enrichment fan-out (IP, domain, hash, email, user) |
-| `fusion` | 8003 | Python | ML scoring (LightGBM + Isolation Forest), correlation, **alert confidence scoring**, **entity risk / RBA** |
+| `fusion` | 8003 | Python | ML scoring (LightGBM + Isolation Forest), correlation, **deterministic correlation narratives** on fused alerts, **alert confidence scoring**, **entity risk / RBA** |
 | `actions` | 8002 | Python | Plugin action executor, blast-radius gating, **ChatOps verification** (HMAC-signed Slack/Teams prompts) |
 | `threatintel` | 8005 | Python | TAXII 2.1 / MISP / OTX / KEV ingestion + triple storage |
 | `ueba` | 8007 | Python | Welford baseline, Z-score scoring, anomaly stream |
@@ -201,7 +202,7 @@ AiSOC/
 | `osquery-tls` | 8443 | Go | TLS server implementing osquery's enrol/config/distributed/log endpoints; ships normalised host events into `ingest` |
 | `osquery-extensions` | — | Go | Out-of-band osquery extensions registering custom virtual tables and decorators consumed by `osquery-tls` |
 | `slack-bot` | — | Python | ChatOps surface: posts approval prompts, exposes `/aisoc` slash command, verifies inbound interactions with HMAC-signed Slack request signatures |
-| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group, **benchmark scoreboard**, conversational investigation chat |
+| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group, **`/alerts` Investigation Rail**, **benchmark scoreboard**, conversational investigation chat |
 
 ## Storage Tier
 
@@ -229,6 +230,27 @@ The agent-side writer lives in
 [`services/agents/app/investigator/ledger.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/ledger.py),
 and the UI consumer is
 [`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx).
+
+## Investigation Rail and correlation narrative
+
+The alert queue (`/alerts`) pairs the sortable table with an **Investigation Rail**
+([`InvestigationRail.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/alerts/InvestigationRail.tsx))
+fed by `GET /api/v1/alerts/{id}`. The response envelope is assembled in
+[`services/api/app/services/alert_rail.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/alert_rail.py)
+(narrative text, entity buckets, merged mini-timeline, recommended actions).
+
+**Narrative** — At fusion time, `services/fusion` runs the same deterministic
+builder as the API vendored copy ([`narrative.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/services/narrative.py))
+so promoted alerts persist a short explanation of *which* signals correlated
+and *why*. Reads do not call an LLM. Alerts created before this shipped get a
+lazy projection on first detail fetch via
+[`narrative_projection.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/narrative_projection.py),
+then the text is cached on the row (see migration `041_alert_correlation_narrative.sql`).
+
+**Sync** — When the narrative builder changes, run `scripts/sync_vendored_narrative.py`
+so `services/api/app/_vendor/narrative.py` stays aligned with fusion.
+
+Operator-facing detail: [Investigation Rail](./console/investigation-rail).
 
 ## Responder PWA
 
