@@ -10,19 +10,19 @@ run. It does not mean zero. The two get conflated constantly and the
 difference matters: one is a fact about users, the other is a fact
 about our tooling.
 
-## Latest — 2026-09-21
+## Latest — 2026-10-01
 
 ### Reach
 
-- Stars: 2,361
-- Forks: 259
-- Unique visitors (14d): 1,541
-- Unique cloners (14d): 377
+- Stars: 2,378
+- Forks: 264
+- Unique visitors (14d): not measured
+- Unique cloners (14d): not measured
 
 ### Conversion
 
 - Contributors: 13
-- Release asset downloads (all time): 52
+- Release asset downloads (all time): 97
 
 ### Package downloads (last month)
 
@@ -37,11 +37,20 @@ about our tooling.
 
 ### Why some values are missing
 
+- traffic/views unavailable (HTTP 403; needs push access)
+- traffic/clones unavailable (HTTP 403; needs push access)
 - npm aisoc: not published yet
 - npm @aisoc/mcp: not published yet
 - npm @aisoc/sdk: not published yet
-- pypi aisoc-sandbox: registry did not answer (HTTP 429)
-- pypi aisoc-cli: registry did not answer (HTTP 429)
-- pypi aisoc-sdk: registry did not answer (HTTP 429)
-- pypi aisoc-plugin-sdk: not published yet
-- pypi aisoc-detections: not published yet
+- pypi aisoc-sandbox: not published yet
+- pypi aisoc-cli: not published yet
+- pypi aisoc-sdk: not published yet
+- pypi aisoc-plugin-sdk: registry did not answer (HTTP 429)
+- pypi aisoc-detections: registry did not answer (HTTP 429)
+
+## History
+
+| Date | Stars | Unique cloners (14d) | Contributors | npm `aisoc` |
+| --- | --- | --- | --- | --- |
+| 2026-09-21 | 2,361 | 377 | 13 | not measured |
+| 2026-10-01 | 2,378 | not measured | 13 | not measured |

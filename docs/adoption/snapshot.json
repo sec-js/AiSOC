@@ -38,6 +38,47 @@
         "pypi aisoc-plugin-sdk: not published yet",
         "pypi aisoc-detections: not published yet"
       ]
+    },
+    {
+      "date": "2026-10-01",
+      "repo": "beenuar/AiSOC",
+      "github": {
+        "stars": 2378,
+        "forks": 264,
+        "watchers": 35,
+        "open_issues": 3,
+        "views_14d": null,
+        "unique_views_14d": null,
+        "clones_14d": null,
+        "unique_clones_14d": null,
+        "contributors": 13,
+        "releases": 26,
+        "release_asset_downloads": 97
+      },
+      "npm": {
+        "aisoc": null,
+        "@aisoc/mcp": null,
+        "@aisoc/sdk": null
+      },
+      "pypi": {
+        "aisoc-sandbox": null,
+        "aisoc-cli": null,
+        "aisoc-sdk": null,
+        "aisoc-plugin-sdk": null,
+        "aisoc-detections": null
+      },
+      "notes": [
+        "traffic/views unavailable (HTTP 403; needs push access)",
+        "traffic/clones unavailable (HTTP 403; needs push access)",
+        "npm aisoc: not published yet",
+        "npm @aisoc/mcp: not published yet",
+        "npm @aisoc/sdk: not published yet",
+        "pypi aisoc-sandbox: not published yet",
+        "pypi aisoc-cli: not published yet",
+        "pypi aisoc-sdk: not published yet",
+        "pypi aisoc-plugin-sdk: registry did not answer (HTTP 429)",
+        "pypi aisoc-detections: registry did not answer (HTTP 429)"
+      ]
     }
   ]
 }
